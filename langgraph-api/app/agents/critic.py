@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
-from langchain_anthropic import ChatAnthropic
+from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.prompts import CRITIC_PROMPT
@@ -58,8 +59,8 @@ async def critic_node(state: dict[str, Any]) -> dict[str, Any]:
 
 Score each draft and determine if it passes the quality gate (>= 7.0)."""
 
-    llm = ChatAnthropic(
-        model="claude-sonnet-4-5-20250929",
+    llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
         temperature=0.3,  # Lower temperature for consistent scoring
         max_tokens=2048,
     )
@@ -132,18 +133,23 @@ Score each draft and determine if it passes the quality gate (>= 7.0)."""
     }
 
 
+def _sanitize_json(text: str) -> str:
+    """Fix common LLM JSON issues: control chars inside strings."""
+    return re.sub(r'(?<=": ")(.*?)(?=")', lambda m: m.group(0).replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t'), text, flags=re.DOTALL)
+
+
 def _extract_json(text: str) -> str | None:
     """Extract a JSON object from text that may contain markdown fences."""
     if "```json" in text:
         start = text.index("```json") + 7
         end = text.index("```", start)
-        return text[start:end].strip()
+        return _sanitize_json(text[start:end].strip())
     if "```" in text:
         start = text.index("```") + 3
         end = text.index("```", start)
-        return text[start:end].strip()
+        return _sanitize_json(text[start:end].strip())
     brace_start = text.find("{")
     brace_end = text.rfind("}")
     if brace_start != -1 and brace_end != -1:
-        return text[brace_start : brace_end + 1]
+        return _sanitize_json(text[brace_start : brace_end + 1])
     return None

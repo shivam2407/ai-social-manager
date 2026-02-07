@@ -4,21 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
-from langchain_anthropic import ChatAnthropic
+from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.prompts import WRITER_PROMPT
-from app.tools import writing_tools
 
 logger = logging.getLogger(__name__)
-
-
-def create_writer(model_name: str = "claude-sonnet-4-5-20250929") -> ChatAnthropic:
-    """Create the LLM instance for the writer, with tools bound."""
-    llm = ChatAnthropic(model=model_name, temperature=0.8, max_tokens=4096)
-    return llm.bind_tools(writing_tools)
 
 
 async def writer_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -71,7 +65,7 @@ async def writer_node(state: dict[str, Any]) -> dict[str, Any]:
             selected_angles=selected_angles,
         )
 
-    llm = create_writer()
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.8, max_tokens=4096)
 
     messages = [
         SystemMessage(content=system_prompt),
@@ -168,18 +162,24 @@ return them unchanged. Address EACH piece of feedback specifically — don't \
 just rephrase the same content."""
 
 
+def _sanitize_json(text: str) -> str:
+    """Fix common LLM JSON issues: control chars inside strings."""
+    # Replace literal newlines/tabs inside JSON string values with escaped versions
+    return re.sub(r'(?<=": ")(.*?)(?=")', lambda m: m.group(0).replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t'), text, flags=re.DOTALL)
+
+
 def _extract_json(text: str) -> str | None:
     """Extract a JSON object from text that may contain markdown fences."""
     if "```json" in text:
         start = text.index("```json") + 7
         end = text.index("```", start)
-        return text[start:end].strip()
+        return _sanitize_json(text[start:end].strip())
     if "```" in text:
         start = text.index("```") + 3
         end = text.index("```", start)
-        return text[start:end].strip()
+        return _sanitize_json(text[start:end].strip())
     brace_start = text.find("{")
     brace_end = text.rfind("}")
     if brace_start != -1 and brace_end != -1:
-        return text[brace_start : brace_end + 1]
+        return _sanitize_json(text[brace_start : brace_end + 1])
     return None

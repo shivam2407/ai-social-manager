@@ -125,9 +125,14 @@ async def generate_content(request: GenerateRequest):
         final_posts = []
         for platform_key, post_data in result.get("final_posts", {}).items():
             try:
+                # Handle content that may be a list (e.g. Twitter threads)
+                content = post_data.get("content", "")
+                if isinstance(content, list):
+                    content = "\n\n".join(str(item) for item in content)
+
                 final_posts.append(FinalPost(
                     platform=Platform(post_data.get("platform", platform_key)),
-                    content=post_data.get("content", ""),
+                    content=content,
                     hashtags=post_data.get("hashtags", []),
                     call_to_action=post_data.get("call_to_action", ""),
                     content_type=post_data.get("content_type", "single_post"),

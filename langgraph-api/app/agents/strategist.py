@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from langchain_anthropic import ChatAnthropic
+from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.prompts import STRATEGIST_PROMPT
@@ -50,8 +50,8 @@ Target Platforms: {', '.join(state['target_platforms'])}
 Create a content plan with DIFFERENT angles for each platform. \
 Do NOT just reformat the same message."""
 
-    llm = ChatAnthropic(
-        model="claude-sonnet-4-5-20250929",
+    llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
         temperature=0.7,
         max_tokens=2048,
     )

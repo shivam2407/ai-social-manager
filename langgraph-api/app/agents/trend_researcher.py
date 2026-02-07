@@ -6,19 +6,12 @@ import json
 import logging
 from typing import Any
 
-from langchain_anthropic import ChatAnthropic
+from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.prompts import TREND_RESEARCHER_PROMPT
-from app.tools import research_tools
 
 logger = logging.getLogger(__name__)
-
-
-def create_trend_researcher(model_name: str = "claude-sonnet-4-5-20250929") -> ChatAnthropic:
-    """Create the LLM instance for the trend researcher, with tools bound."""
-    llm = ChatAnthropic(model=model_name, temperature=0.7, max_tokens=2048)
-    return llm.bind_tools(research_tools)
 
 
 async def trend_researcher_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -26,7 +19,7 @@ async def trend_researcher_node(state: dict[str, Any]) -> dict[str, Any]:
 
     This node:
     1. Formats the system prompt with brand context
-    2. Calls Claude with web search tools
+    2. Calls LLM to identify trends using training knowledge
     3. Parses structured trend data from the response
     4. Returns state updates for downstream agents
     """
@@ -46,7 +39,7 @@ async def trend_researcher_node(state: dict[str, Any]) -> dict[str, Any]:
         "Return your findings as the specified JSON format."
     )
 
-    llm = create_trend_researcher()
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.7, max_tokens=2048)
 
     messages = [
         SystemMessage(content=system_prompt),
