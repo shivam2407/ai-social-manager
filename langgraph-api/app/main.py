@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import uuid
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -31,16 +33,32 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Maximum stored results to prevent unbounded memory growth
+MAX_STORED_RESULTS = 500
+
 # ── Global state ────────────────────────────────────────────────
 checkpointer = MemorySaver()
 graph = None
-run_results: dict[str, dict[str, Any]] = {}  # thread_id -> result
+run_results: OrderedDict[str, dict[str, Any]] = OrderedDict()  # thread_id -> result
+
+
+def _store_result(thread_id: str, data: dict[str, Any]) -> None:
+    """Store a result, evicting oldest entries if at capacity."""
+    run_results[thread_id] = data
+    while len(run_results) > MAX_STORED_RESULTS:
+        run_results.popitem(last=False)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Compile the graph on startup."""
+    """Compile the graph on startup; validate env vars."""
     global graph
+
+    # Validate required environment variables at startup
+    if not os.environ.get("GROQ_API_KEY"):
+        logger.error("GROQ_API_KEY environment variable is not set!")
+        raise RuntimeError("GROQ_API_KEY environment variable is required")
+
     logger.info("Compiling LangGraph multi-agent graph...")
     graph = compile_graph(checkpointer=checkpointer)
     logger.info("Graph ready. API is live.")
@@ -59,12 +77,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS: restrict to known frontend origins (configurable via env var)
+_allowed_origins = os.environ.get(
+    "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[origin.strip() for origin in _allowed_origins],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -150,11 +173,11 @@ async def generate_content(request: GenerateRequest):
             critic_summary=result.get("critic_summary", ""),
         )
 
-        # Store result for status lookups
-        run_results[thread_id] = {
+        # Store result for status lookups (bounded)
+        _store_result(thread_id, {
             "status": "completed",
             "response": response.model_dump(),
-        }
+        })
 
         logger.info(
             "Generation complete (thread: %s, posts: %d, revisions: %d)",
@@ -167,8 +190,17 @@ async def generate_content(request: GenerateRequest):
 
     except Exception as e:
         logger.error("Generation failed (thread: %s): %s", thread_id, e, exc_info=True)
-        run_results[thread_id] = {"status": "failed", "error": str(e)}
-        raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
+        _store_result(thread_id, {"status": "failed", "error": str(e)})
+        # Don't leak internal error details to client
+        raise HTTPException(status_code=500, detail="Content generation failed. Please try again.")
+
+
+def _validate_thread_id(thread_id: str) -> None:
+    """Validate that a thread_id looks like a UUID."""
+    try:
+        uuid.UUID(thread_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid thread ID format")
 
 
 @app.get("/api/generate/{thread_id}/stream")
@@ -177,6 +209,7 @@ async def stream_generation(thread_id: str):
 
     Streams node entry/exit events so the frontend can show real-time progress.
     """
+    _validate_thread_id(thread_id)
     if graph is None:
         raise HTTPException(status_code=503, detail="Graph not compiled yet")
 
@@ -193,7 +226,8 @@ async def stream_generation(thread_id: str):
                     data = json.dumps({"event": kind, "node": name})
                     yield f"data: {data}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'event': 'error', 'detail': str(e)})}\n\n"
+            logger.error("SSE stream error (thread: %s): %s", thread_id, e, exc_info=True)
+            yield f"data: {json.dumps({'event': 'error', 'detail': 'Stream error occurred'})}\n\n"
 
         yield f"data: {json.dumps({'event': 'done'})}\n\n"
 
@@ -203,6 +237,7 @@ async def stream_generation(thread_id: str):
 @app.get("/api/status/{thread_id}")
 async def get_status(thread_id: str):
     """Check the status of a generation run."""
+    _validate_thread_id(thread_id)
     if thread_id in run_results:
         return run_results[thread_id]
 
@@ -227,4 +262,4 @@ async def get_status(thread_id: str):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)

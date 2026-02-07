@@ -23,13 +23,21 @@ def web_search(query: str) -> str:
     Args:
         query: The search query to find relevant trends and content.
     """
+    # Limit query length to prevent abuse
+    query = query[:500]
+
     # Using DuckDuckGo instant answer API (free, no key needed)
     try:
-        with httpx.Client(timeout=10) as client:
+        with httpx.Client(
+            timeout=10,
+            follow_redirects=False,
+            max_redirects=0,
+        ) as client:
             resp = client.get(
                 "https://api.duckduckgo.com/",
                 params={"q": query, "format": "json", "no_html": 1},
             )
+            resp.raise_for_status()
             data = resp.json()
 
             results = []

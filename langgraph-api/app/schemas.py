@@ -135,15 +135,20 @@ class FinalPost(BaseModel):
 # --- API Request/Response ---
 
 class GenerateRequest(BaseModel):
-    brand_name: str
-    niche: str
-    target_audience: str = "general audience"
-    voice_description: str = "Professional yet approachable. Clear, concise, and helpful."
-    tone_keywords: list[str] = Field(default_factory=lambda: ["authentic", "knowledgeable"])
-    example_posts: list[str] = Field(default_factory=list)
-    content_request: str = Field(description="What to write about")
+    brand_name: str = Field(min_length=1, max_length=200)
+    niche: str = Field(min_length=1, max_length=200)
+    target_audience: str = Field(default="general audience", max_length=500)
+    voice_description: str = Field(
+        default="Professional yet approachable. Clear, concise, and helpful.",
+        max_length=1000,
+    )
+    tone_keywords: list[str] = Field(default_factory=lambda: ["authentic", "knowledgeable"], max_length=20)
+    example_posts: list[str] = Field(default_factory=list, max_length=10)
+    content_request: str = Field(description="What to write about", min_length=1, max_length=2000)
     target_platforms: list[Platform] = Field(
         default_factory=lambda: [Platform.TWITTER, Platform.LINKEDIN],
+        min_length=1,
+        max_length=3,
     )
 
 
