@@ -5,7 +5,9 @@ import {
   History,
   Settings,
   Zap,
+  LogOut,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 const links = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -15,6 +17,8 @@ const links = [
 ];
 
 export default function Sidebar() {
+  const { user, logout } = useAuth();
+
   return (
     <aside className="w-64 shrink-0 border-r border-gray-800 bg-gray-950 flex flex-col h-screen sticky top-0">
       {/* Logo */}
@@ -47,8 +51,17 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-5 py-4 border-t border-gray-800 text-xs text-gray-600">
-        Multi-Agent Pipeline
+      <div className="px-4 py-4 border-t border-gray-800 space-y-3">
+        {user && (
+          <p className="text-xs text-gray-500 truncate">{user.email}</p>
+        )}
+        <button
+          onClick={logout}
+          className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          Logout
+        </button>
       </div>
     </aside>
   );

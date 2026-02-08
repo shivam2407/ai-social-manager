@@ -158,3 +158,80 @@ class GenerateResponse(BaseModel):
     posts: list[FinalPost] = Field(default_factory=list)
     revision_count: int = 0
     critic_summary: str = ""
+
+
+# --- Auth ---
+
+class RegisterRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=6, max_length=128)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+# --- Brand CRUD ---
+
+class BrandProfileCreate(BaseModel):
+    brand_name: str = Field(min_length=1, max_length=200)
+    niche: str = Field(min_length=1, max_length=200)
+    target_audience: str = Field(default="general audience", max_length=500)
+    voice_description: str = Field(default="", max_length=1000)
+    tone_keywords: list[str] = Field(default_factory=list, max_length=20)
+    example_posts: list[str] = Field(default_factory=list, max_length=10)
+
+
+class BrandProfileResponse(BaseModel):
+    id: int
+    brand_name: str
+    niche: str
+    target_audience: str
+    voice_description: str
+    tone_keywords: list[str]
+    example_posts: list[str]
+    created_at: str = ""
+    updated_at: str = ""
+
+
+# --- History ---
+
+class PostResponse(BaseModel):
+    id: int
+    platform: str
+    content: str
+    hashtags: list[str] = Field(default_factory=list)
+    call_to_action: str = ""
+    content_type: str = "single_post"
+    image_prompt: str = ""
+    critic_score: float = 0
+
+
+class GenerationHistoryResponse(BaseModel):
+    id: int
+    thread_id: str
+    content_request: str
+    brand_name: str = ""
+    status: str = "completed"
+    revision_count: int = 0
+    critic_summary: str = ""
+    created_at: str = ""
+    posts: list[PostResponse] = Field(default_factory=list)
+
+
+class DashboardStats(BaseModel):
+    total_generations: int = 0
+    total_posts: int = 0
+    avg_critic_score: float = 0

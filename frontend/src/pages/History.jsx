@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Trash2, ChevronDown, ChevronUp, Clock } from "lucide-react";
-import { getHistory, clearHistory } from "../store";
+import { getHistoryApi, clearHistoryApi } from "../api";
 import PostCard from "../components/PostCard";
 import PlatformBadge from "../components/PlatformBadge";
 
@@ -12,7 +12,7 @@ export default function History() {
   const [expanded, setExpanded] = useState(null);
 
   useEffect(() => {
-    setHistory(getHistory());
+    getHistoryApi().then(setHistory).catch(() => {});
   }, []);
 
   const filtered =
@@ -22,10 +22,14 @@ export default function History() {
           h.posts?.some((p) => p.platform === filter),
         );
 
-  const handleClear = () => {
+  const handleClear = async () => {
     if (window.confirm("Clear all generation history?")) {
-      clearHistory();
-      setHistory([]);
+      try {
+        await clearHistoryApi();
+        setHistory([]);
+      } catch {
+        // ignore
+      }
     }
   };
 
@@ -102,7 +106,7 @@ export default function History() {
                       />
                     ))}
                     <span className="text-xs text-gray-600">
-                      {new Date(item.timestamp).toLocaleString()}
+                      {new Date(item.created_at).toLocaleString()}
                     </span>
                     {item.brand_name && (
                       <span className="text-xs text-gray-600">

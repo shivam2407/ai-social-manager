@@ -1,10 +1,6 @@
 import { useState, useEffect } from "react";
 import { Trash2, Edit2, Plus } from "lucide-react";
-import {
-  getBrandProfiles,
-  saveBrandProfile,
-  deleteBrandProfile,
-} from "../store";
+import { getBrands, createBrand, updateBrand, deleteBrandApi } from "../api";
 import BrandForm from "../components/BrandForm";
 
 export default function BrandSettings() {
@@ -12,27 +8,37 @@ export default function BrandSettings() {
   const [editing, setEditing] = useState(null); // null = list, "new" | profile.id
   const [editData, setEditData] = useState(null);
 
-  useEffect(() => {
-    setProfiles(getBrandProfiles());
-  }, []);
-
-  const refresh = () => setProfiles(getBrandProfiles());
-
-  const handleSave = (form) => {
-    const profile = {
-      ...form,
-      id: editing === "new" ? undefined : editing,
-    };
-    saveBrandProfile(profile);
-    refresh();
-    setEditing(null);
-    setEditData(null);
+  const refresh = () => {
+    getBrands().then(setProfiles).catch(() => {});
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm("Delete this brand profile?")) {
-      deleteBrandProfile(id);
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const handleSave = async (form) => {
+    try {
+      if (editing === "new") {
+        await createBrand(form);
+      } else {
+        await updateBrand(editing, form);
+      }
       refresh();
+      setEditing(null);
+      setEditData(null);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm("Delete this brand profile?")) {
+      try {
+        await deleteBrandApi(id);
+        refresh();
+      } catch {
+        // ignore
+      }
     }
   };
 
@@ -47,7 +53,7 @@ export default function BrandSettings() {
         <div>
           <h1 className="text-2xl font-bold text-white">Brand Settings</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Manage saved brand profiles (stored in your browser)
+            Manage your brand profiles
           </p>
         </div>
         {!editing && (

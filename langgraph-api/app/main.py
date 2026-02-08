@@ -11,12 +11,19 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from langgraph.checkpoint.memory import MemorySaver
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import get_current_user
+from app.database import get_db, init_db
 from app.graph.builder import compile_graph
+from app.models import Generation, Post, User
+from app.routers import auth as auth_router
+from app.routers import brands as brands_router
+from app.routers import history as history_router
 from app.schemas import (
     BrandProfile,
     FinalPost,
@@ -51,13 +58,16 @@ def _store_result(thread_id: str, data: dict[str, Any]) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Compile the graph on startup; validate env vars."""
+    """Compile the graph on startup; validate env vars; init DB."""
     global graph
 
     # Validate required environment variables at startup
     if not os.environ.get("GROQ_API_KEY"):
         logger.error("GROQ_API_KEY environment variable is not set!")
         raise RuntimeError("GROQ_API_KEY environment variable is required")
+
+    logger.info("Initializing database...")
+    await init_db()
 
     logger.info("Compiling LangGraph multi-agent graph...")
     graph = compile_graph(checkpointer=checkpointer)
@@ -86,10 +96,14 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in _allowed_origins],
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
+# ── Routers ────────────────────────────────────────────────────
+app.include_router(auth_router.router)
+app.include_router(brands_router.router)
+app.include_router(history_router.router)
 
 # ── Endpoints ───────────────────────────────────────────────────
 
@@ -101,7 +115,11 @@ async def health_check():
 
 
 @app.post("/api/generate", response_model=GenerateResponse)
-async def generate_content(request: GenerateRequest):
+async def generate_content(
+    request: GenerateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Trigger the full content generation pipeline.
 
     Runs all 4 agents: trend researcher → strategist → writer → critic
@@ -172,6 +190,35 @@ async def generate_content(request: GenerateRequest):
             revision_count=result.get("revision_count", 0),
             critic_summary=result.get("critic_summary", ""),
         )
+
+        # Save generation + posts to database
+        try:
+            gen = Generation(
+                user_id=user.id,
+                thread_id=thread_id,
+                content_request=request.content_request,
+                brand_name=request.brand_name,
+                status="completed",
+                revision_count=result.get("revision_count", 0),
+                critic_summary=result.get("critic_summary", ""),
+            )
+            db.add(gen)
+            await db.flush()
+
+            for fp in final_posts:
+                db.add(Post(
+                    generation_id=gen.id,
+                    platform=fp.platform.value,
+                    content=fp.content,
+                    hashtags=fp.hashtags,
+                    call_to_action=fp.call_to_action,
+                    content_type=fp.content_type,
+                    image_prompt=fp.image_prompt,
+                    critic_score=fp.critic_score,
+                ))
+            await db.commit()
+        except Exception as e:
+            logger.error("Failed to save generation to DB: %s", e)
 
         # Store result for status lookups (bounded)
         _store_result(thread_id, {

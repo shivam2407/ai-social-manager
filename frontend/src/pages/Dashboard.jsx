@@ -1,33 +1,20 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity, Sparkles, BarChart3, Clock, ArrowRight } from "lucide-react";
-import { checkHealth } from "../api";
-import { getHistory } from "../store";
+import { checkHealth, getStats, getHistoryApi } from "../api";
 import PlatformBadge from "../components/PlatformBadge";
 import ScoreRing from "../components/ScoreRing";
 
 export default function Dashboard() {
   const [health, setHealth] = useState(null);
-  const [history, setHistory] = useState([]);
+  const [stats, setStats] = useState({ total_generations: 0, total_posts: 0, avg_critic_score: 0 });
+  const [recent, setRecent] = useState([]);
 
   useEffect(() => {
     checkHealth().then(setHealth).catch(() => setHealth({ status: "unreachable" }));
-    setHistory(getHistory());
+    getStats().then(setStats).catch(() => {});
+    getHistoryApi(5).then(setRecent).catch(() => {});
   }, []);
-
-  const totalPosts = history.reduce(
-    (sum, h) => sum + (h.posts?.length || 0),
-    0,
-  );
-  const avgScore =
-    totalPosts > 0
-      ? history.reduce(
-          (sum, h) =>
-            sum +
-            (h.posts || []).reduce((s, p) => s + (p.critic_score || 0), 0),
-          0,
-        ) / totalPosts
-      : 0;
 
   const isHealthy = health?.status === "healthy";
 
@@ -90,9 +77,9 @@ export default function Dashboard() {
               Posts Generated
             </span>
           </div>
-          <p className="text-lg font-semibold text-white">{totalPosts}</p>
+          <p className="text-lg font-semibold text-white">{stats.total_posts}</p>
           <p className="text-xs text-gray-600 mt-1">
-            {history.length} generation{history.length !== 1 ? "s" : ""}
+            {stats.total_generations} generation{stats.total_generations !== 1 ? "s" : ""}
           </p>
         </div>
 
@@ -107,7 +94,7 @@ export default function Dashboard() {
             </span>
           </div>
           <p className="text-lg font-semibold text-white">
-            {avgScore > 0 ? avgScore.toFixed(1) : "--"}
+            {stats.avg_critic_score > 0 ? stats.avg_critic_score.toFixed(1) : "--"}
           </p>
           <p className="text-xs text-gray-600 mt-1">out of 10</p>
         </div>
@@ -119,7 +106,7 @@ export default function Dashboard() {
           <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
             Recent Generations
           </h2>
-          {history.length > 0 && (
+          {recent.length > 0 && (
             <Link
               to="/history"
               className="text-xs text-violet-400 hover:text-violet-300 inline-flex items-center gap-1"
@@ -129,7 +116,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        {history.length === 0 ? (
+        {recent.length === 0 ? (
           <div className="rounded-xl border border-gray-800 border-dashed bg-gray-900/30 p-10 text-center">
             <Clock className="w-8 h-8 text-gray-700 mx-auto mb-3" />
             <p className="text-sm text-gray-500">No generations yet</p>
@@ -142,7 +129,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {history.slice(0, 5).map((item) => (
+            {recent.map((item) => (
               <div
                 key={item.id}
                 className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 flex items-center justify-between"
@@ -156,7 +143,7 @@ export default function Dashboard() {
                       <PlatformBadge key={p.platform} platform={p.platform} />
                     ))}
                     <span className="text-xs text-gray-600">
-                      {new Date(item.timestamp).toLocaleDateString()}
+                      {new Date(item.created_at).toLocaleDateString()}
                     </span>
                   </div>
                 </div>

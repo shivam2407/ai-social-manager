@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Sparkles, Loader2 } from "lucide-react";
-import { generateContent } from "../api";
-import { addToHistory, getBrandProfiles } from "../store";
+import { generateContent, getBrands } from "../api";
 import BrandForm from "../components/BrandForm";
 import PostCard from "../components/PostCard";
 import PipelineStatus from "../components/PipelineStatus";
@@ -35,20 +34,23 @@ export default function Generate() {
   const timersRef = useRef([]);
   const resultsRef = useRef(null);
 
-  // Load saved brand if available
+  // Load saved brand from API if available
   useEffect(() => {
-    const profiles = getBrandProfiles();
-    if (profiles.length > 0) {
-      const p = profiles[0];
-      setBrand({
-        brand_name: p.brand_name || "",
-        niche: p.niche || "",
-        target_audience: p.target_audience || "",
-        voice_description: p.voice_description || "",
-        tone_keywords: p.tone_keywords || [],
-        example_posts: p.example_posts || [],
-      });
-    }
+    getBrands()
+      .then((profiles) => {
+        if (profiles.length > 0) {
+          const p = profiles[0];
+          setBrand({
+            brand_name: p.brand_name || "",
+            niche: p.niche || "",
+            target_audience: p.target_audience || "",
+            voice_description: p.voice_description || "",
+            tone_keywords: p.tone_keywords || [],
+            example_posts: p.example_posts || [],
+          });
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const togglePlatform = (p) =>
@@ -101,16 +103,6 @@ export default function Generate() {
       setResult(data);
       setActiveStage(null);
       setCompletedStages(stageTimings.map((s) => s.key));
-
-      addToHistory({
-        thread_id: data.thread_id,
-        content_request: contentRequest,
-        brand_name: brand.brand_name,
-        platforms,
-        posts: data.posts,
-        revision_count: data.revision_count,
-        critic_summary: data.critic_summary,
-      });
 
       // Scroll to results
       setTimeout(() => {
