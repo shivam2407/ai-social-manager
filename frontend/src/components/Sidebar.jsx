@@ -4,6 +4,7 @@ import {
   Sparkles,
   History,
   Settings,
+  Key,
   Zap,
   LogOut,
 } from "lucide-react";
@@ -14,6 +15,7 @@ const links = [
   { to: "/generate", icon: Sparkles, label: "Generate" },
   { to: "/history", icon: History, label: "History" },
   { to: "/brand", icon: Settings, label: "Brand Settings" },
+  { to: "/settings", icon: Key, label: "API Keys" },
 ];
 
 export default function Sidebar() {

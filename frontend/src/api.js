@@ -130,3 +130,46 @@ export async function clearHistoryApi() {
   if (res.status === 204) return;
   return handleResponse(res);
 }
+
+// --- Settings / API Keys ---
+
+export async function getProviders() {
+  const res = await fetch(`${BASE}/api/settings/providers`, {
+    headers: authHeaders(),
+  });
+  return handleResponse(res);
+}
+
+export async function getApiKeys() {
+  const res = await fetch(`${BASE}/api/settings/api-keys`, {
+    headers: authHeaders(),
+  });
+  return handleResponse(res);
+}
+
+export async function upsertApiKey(data) {
+  const res = await fetch(`${BASE}/api/settings/api-keys`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(data),
+  });
+  return handleResponse(res);
+}
+
+export async function deleteApiKey(provider) {
+  const res = await fetch(`${BASE}/api/settings/api-keys/${provider}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (res.status === 204) return;
+  return handleResponse(res);
+}
+
+export async function testApiKey(data) {
+  const res = await fetch(`${BASE}/api/settings/api-keys/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(data),
+  });
+  return handleResponse(res);
+}

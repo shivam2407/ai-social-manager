@@ -235,3 +235,63 @@ class DashboardStats(BaseModel):
     total_generations: int = 0
     total_posts: int = 0
     avg_critic_score: float = 0
+
+
+# --- LLM Providers ---
+
+class ProviderEnum(str, Enum):
+    CLAUDE = "claude"
+    GEMINI = "gemini"
+    GROK = "grok"
+    CHATGPT = "chatgpt"
+    MOCK = "mock"
+
+
+PROVIDER_MODELS: dict[str, list[str]] = {
+    "claude": ["claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"],
+    "gemini": ["gemini-2.0-flash", "gemini-2.5-pro"],
+    "grok": ["grok-3", "grok-3-mini"],
+    "chatgpt": ["gpt-4o", "gpt-4o-mini"],
+    "mock": ["mock-v1"],
+}
+
+PROVIDER_DEFAULT_MODELS: dict[str, str] = {
+    "claude": "claude-sonnet-4-5-20250929",
+    "gemini": "gemini-2.0-flash",
+    "grok": "grok-3",
+    "chatgpt": "gpt-4o",
+    "mock": "mock-v1",
+}
+
+
+class ApiKeyCreate(BaseModel):
+    provider: ProviderEnum
+    api_key: Optional[str] = Field(default=None, max_length=500)
+    model: Optional[str] = None
+    is_default: bool = False
+
+
+class ApiKeyResponse(BaseModel):
+    provider: str
+    model: str
+    is_default: bool
+    key_hint: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class ApiKeyTestRequest(BaseModel):
+    provider: ProviderEnum
+    api_key: str = Field(min_length=1, max_length=500)
+    model: Optional[str] = None
+
+
+class ApiKeyTestResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class ProviderInfo(BaseModel):
+    provider: str
+    models: list[str]
+    default_model: str

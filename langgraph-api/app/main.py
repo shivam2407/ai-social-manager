@@ -6,24 +6,29 @@ import json
 import logging
 import os
 import uuid
+from pathlib import Path
 from collections import OrderedDict
 from contextlib import asynccontextmanager
 from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from langgraph.checkpoint.memory import MemorySaver
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db, init_db
+from app.encryption import decrypt_api_key
 from app.graph.builder import compile_graph
-from app.models import Generation, Post, User
+from app.models import Generation, Post, User, UserApiKey
 from app.routers import auth as auth_router
 from app.routers import brands as brands_router
 from app.routers import history as history_router
+from app.routers import settings as settings_router
 from app.schemas import (
     BrandProfile,
     FinalPost,
@@ -62,9 +67,9 @@ async def lifespan(app: FastAPI):
     global graph
 
     # Validate required environment variables at startup
-    if not os.environ.get("GROQ_API_KEY"):
-        logger.error("GROQ_API_KEY environment variable is not set!")
-        raise RuntimeError("GROQ_API_KEY environment variable is required")
+    if not os.environ.get("ENCRYPTION_KEY"):
+        logger.error("ENCRYPTION_KEY environment variable is not set!")
+        raise RuntimeError("ENCRYPTION_KEY environment variable is required")
 
     logger.info("Initializing database...")
     await init_db()
@@ -104,6 +109,7 @@ app.add_middleware(
 app.include_router(auth_router.router)
 app.include_router(brands_router.router)
 app.include_router(history_router.router)
+app.include_router(settings_router.router)
 
 # ── Endpoints ───────────────────────────────────────────────────
 
@@ -128,6 +134,26 @@ async def generate_content(
     if graph is None:
         raise HTTPException(status_code=503, detail="Graph not compiled yet")
 
+    # Load user's default API key
+    result = await db.execute(
+        select(UserApiKey).where(
+            UserApiKey.user_id == user.id,
+            UserApiKey.is_default == True,  # noqa: E712
+        )
+    )
+    default_key = result.scalar_one_or_none()
+    if not default_key:
+        raise HTTPException(
+            status_code=400,
+            detail="No default API key configured. Please add one in Settings.",
+        )
+
+    llm_config = {
+        "provider": default_key.provider,
+        "api_key": decrypt_api_key(default_key.encrypted_api_key),
+        "model": default_key.model,
+    }
+
     thread_id = str(uuid.uuid4())
 
     brand_profile = BrandProfile(
@@ -143,6 +169,7 @@ async def generate_content(
         "brand_profile": brand_profile.model_dump(),
         "content_request": request.content_request,
         "target_platforms": [p.value for p in request.target_platforms],
+        "llm_config": llm_config,
         "messages": [],
         "trending_topics": [],
         "competitor_insights": [],
@@ -164,12 +191,23 @@ async def generate_content(
         result = await graph.ainvoke(initial_state, config=config)
 
         final_posts = []
+        logger.info("Final posts keys per platform: %s",
+                     {k: list(v.keys()) if isinstance(v, dict) else type(v)
+                      for k, v in result.get("final_posts", {}).items()})
         for platform_key, post_data in result.get("final_posts", {}).items():
             try:
                 # Handle content that may be a list (e.g. Twitter threads)
                 content = post_data.get("content", "")
                 if isinstance(content, list):
                     content = "\n\n".join(str(item) for item in content)
+                if isinstance(content, dict):
+                    content = json.dumps(content)
+                if not content:
+                    # Try alternative keys different providers may use
+                    for key in ("caption", "text", "body", "post", "copy"):
+                        if post_data.get(key):
+                            content = post_data[key] if isinstance(post_data[key], str) else json.dumps(post_data[key])
+                            break
 
                 final_posts.append(FinalPost(
                     platform=Platform(post_data.get("platform", platform_key)),
@@ -183,12 +221,13 @@ async def generate_content(
             except Exception as e:
                 logger.warning("Failed to parse post for %s: %s", platform_key, e)
 
+        raw_summary = result.get("critic_summary", "")
         response = GenerateResponse(
             thread_id=thread_id,
             status="completed",
             posts=final_posts,
             revision_count=result.get("revision_count", 0),
-            critic_summary=result.get("critic_summary", ""),
+            critic_summary=raw_summary if isinstance(raw_summary, str) else json.dumps(raw_summary),
         )
 
         # Save generation + posts to database
@@ -302,6 +341,18 @@ async def get_status(thread_id: str):
         pass
 
     raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+
+
+# ── Serve built frontend (production) ──────────────────────────
+_frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+
+if _frontend_dist.is_dir():
+    app.mount("/assets", StaticFiles(directory=_frontend_dist / "assets"), name="static")
+
+    @app.get("/{path:path}")
+    async def spa_catch_all(request: Request):
+        """Serve index.html for all non-API routes (SPA client-side routing)."""
+        return FileResponse(_frontend_dist / "index.html")
 
 
 # ── Entry point for development ─────────────────────────────────

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Loader2 } from "lucide-react";
-import { generateContent, getBrands } from "../api";
+import { Link } from "react-router-dom";
+import { Sparkles, Loader2, AlertTriangle } from "lucide-react";
+import { generateContent, getBrands, createBrand, updateBrand, getApiKeys } from "../api";
 import BrandForm from "../components/BrandForm";
 import PostCard from "../components/PostCard";
 import PipelineStatus from "../components/PipelineStatus";
@@ -15,6 +16,7 @@ const stageTimings = [
 ];
 
 export default function Generate() {
+  const [brandId, setBrandId] = useState(null);
   const [brand, setBrand] = useState({
     brand_name: "",
     niche: "",
@@ -31,15 +33,17 @@ export default function Generate() {
   const [result, setResult] = useState(null);
   const [activeStage, setActiveStage] = useState(null);
   const [completedStages, setCompletedStages] = useState([]);
+  const [hasDefaultKey, setHasDefaultKey] = useState(true);
   const timersRef = useRef([]);
   const resultsRef = useRef(null);
 
-  // Load saved brand from API if available
+  // Load saved brand and check for default API key
   useEffect(() => {
     getBrands()
       .then((profiles) => {
         if (profiles.length > 0) {
           const p = profiles[0];
+          setBrandId(p.id);
           setBrand({
             brand_name: p.brand_name || "",
             niche: p.niche || "",
@@ -51,6 +55,9 @@ export default function Generate() {
         }
       })
       .catch(() => {});
+    getApiKeys()
+      .then((keys) => setHasDefaultKey(keys.some((k) => k.is_default)))
+      .catch(() => setHasDefaultKey(false));
   }, []);
 
   const togglePlatform = (p) =>
@@ -131,6 +138,19 @@ export default function Generate() {
         </p>
       </div>
 
+      {!hasDefaultKey && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>
+            No default API key configured.{" "}
+            <Link to="/settings" className="underline hover:text-amber-300">
+              Go to Settings
+            </Link>{" "}
+            to add one before generating content.
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-8">
         {/* Left: Brand Form */}
         <div className="space-y-6">
@@ -139,8 +159,29 @@ export default function Generate() {
               Brand Profile
             </h2>
             <BrandForm
+              key={brandId || "new"}
               initial={brand}
-              onSubmit={setBrand}
+              onSubmit={async (form) => {
+                setBrand(form);
+                const payload = {
+                  brand_name: form.brand_name,
+                  niche: form.niche,
+                  target_audience: form.target_audience || "general audience",
+                  voice_description: form.voice_description || "",
+                  tone_keywords: form.tone_keywords || [],
+                  example_posts: form.example_posts || [],
+                };
+                try {
+                  if (brandId) {
+                    await updateBrand(brandId, payload);
+                  } else {
+                    const saved = await createBrand(payload);
+                    if (saved?.id) setBrandId(saved.id);
+                  }
+                } catch (err) {
+                  console.error("Brand save failed:", err);
+                }
+              }}
               submitLabel="Apply Brand"
             />
           </div>
@@ -156,7 +197,7 @@ export default function Generate() {
             <textarea
               className={`${inputClass} resize-none`}
               rows={5}
-              placeholder="Write about our new feature launch — highlight ease of use and developer experience..."
+              placeholder="e.g. Announce our summer sale, share a behind-the-scenes look, promote an upcoming event..."
               value={contentRequest}
               onChange={(e) => setContentRequest(e.target.value)}
             />
@@ -186,7 +227,7 @@ export default function Generate() {
             {/* Generate button */}
             <button
               onClick={handleGenerate}
-              disabled={loading}
+              disabled={loading || !hasDefaultKey}
               className="w-full py-3 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
             >
               {loading ? (

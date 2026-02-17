@@ -6,6 +6,10 @@ requires-python = ">=3.11"
 dependencies = [
     "langgraph>=0.2.0",
     "langchain-groq>=0.2.0",
+    "langchain-anthropic>=0.3.0",
+    "langchain-google-genai>=2.0.0",
+    "langchain-xai>=0.2.0",
+    "langchain-openai>=0.3.0",
     "langchain-core>=0.3.0",
     "langchain-community>=0.3.0",
     "fastapi>=0.115.0",
@@ -16,8 +20,10 @@ dependencies = [
     "sse-starlette>=2.0.0",
     "sqlalchemy[asyncio]>=2.0",
     "aiosqlite>=0.20.0",
+    "asyncpg>=0.29.0",
     "python-jose[cryptography]>=3.3.0",
-    "passlib[bcrypt]>=1.7.4",
+    "bcrypt>=4.0.0",
+    "cryptography>=44.0.0",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +31,9 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
 
 [build-system]
 requires = ["setuptools>=68.0"]

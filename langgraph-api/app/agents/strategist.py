@@ -6,22 +6,17 @@ import json
 import logging
 from typing import Any
 
-from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.llm_factory import create_llm
 from app.prompts import STRATEGIST_PROMPT
+from app.response_parser import parse_json_response
 
 logger = logging.getLogger(__name__)
 
 
 async def strategist_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Analyze trends and plan platform-specific content strategy.
-
-    This node:
-    1. Takes research output (trends, competitor insights)
-    2. Plans a content strategy with per-platform angles
-    3. Returns a content plan for the writer agent
-    """
+    """Analyze trends and plan platform-specific content strategy."""
     brand = state["brand_profile"]
     content_request = state["content_request"]
     trending_topics = state.get("trending_topics", [])
@@ -50,10 +45,10 @@ Target Platforms: {', '.join(state['target_platforms'])}
 Create a content plan with DIFFERENT angles for each platform. \
 Do NOT just reformat the same message."""
 
-    llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
-        temperature=0.7,
-        max_tokens=2048,
+    llm_cfg = state["llm_config"]
+    llm = create_llm(
+        provider=llm_cfg["provider"], api_key=llm_cfg["api_key"],
+        model=llm_cfg["model"], agent_name="strategist",
     )
 
     messages = [
@@ -62,30 +57,15 @@ Do NOT just reformat the same message."""
     ]
 
     response = await llm.ainvoke(messages)
+    data = parse_json_response(response.content)
 
-    # Parse strategy response
-    content_plan: dict[str, Any] = {}
-    selected_angles: list[dict[str, Any]] = []
-
-    try:
-        content = response.content
-        if isinstance(content, list):
-            content = " ".join(
-                block.get("text", "") for block in content if isinstance(block, dict)
-            )
-
-        json_str = _extract_json(content)
-        if json_str:
-            data = json.loads(json_str)
-            content_plan = {
-                "theme": data.get("theme", ""),
-                "content_pillars": data.get("content_pillars", []),
-                "campaign_context": data.get("campaign_context", ""),
-                "angles": data.get("angles", []),
-            }
-            selected_angles = data.get("angles", [])
-    except (json.JSONDecodeError, TypeError) as e:
-        logger.warning("Failed to parse strategist response as JSON: %s", e)
+    content_plan = {
+        "theme": data.get("theme", ""),
+        "content_pillars": data.get("content_pillars", []),
+        "campaign_context": data.get("campaign_context", ""),
+        "angles": data.get("angles", []),
+    }
+    selected_angles = data.get("angles", [])
 
     logger.info(
         "Strategist planned %d platform angles for theme: %s",
@@ -98,20 +78,3 @@ Do NOT just reformat the same message."""
         "selected_angles": selected_angles,
         "messages": [response],
     }
-
-
-def _extract_json(text: str) -> str | None:
-    """Extract a JSON object from text that may contain markdown fences."""
-    if "```json" in text:
-        start = text.index("```json") + 7
-        end = text.index("```", start)
-        return text[start:end].strip()
-    if "```" in text:
-        start = text.index("```") + 3
-        end = text.index("```", start)
-        return text[start:end].strip()
-    brace_start = text.find("{")
-    brace_end = text.rfind("}")
-    if brace_start != -1 and brace_end != -1:
-        return text[brace_start : brace_end + 1]
-    return None

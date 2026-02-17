@@ -23,6 +23,7 @@ class SocialMediaState(TypedDict):
     brand_profile: dict[str, Any]          # serialized BrandProfile
     content_request: str                    # user's content brief
     target_platforms: list[str]             # ["twitter", "linkedin", ...]
+    llm_config: dict[str, str]             # {"provider", "api_key", "model"}
 
     # ── Agent messages (accumulated via reducer) ───────────────────
     messages: Annotated[list[BaseMessage], add_messages]

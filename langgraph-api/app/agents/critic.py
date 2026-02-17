@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from typing import Any
 
-from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.llm_factory import create_llm
 from app.prompts import CRITIC_PROMPT
+from app.response_parser import parse_json_response
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +20,7 @@ MAX_REVISIONS = 3
 
 
 async def critic_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Review content drafts and score them against quality criteria.
-
-    This node:
-    1. Takes writer drafts and brand context
-    2. Scores each draft on voice, engagement, platform fit, clarity
-    3. Decides approve (>= 7) or revise (< 7)
-    4. Returns scores and approval status that controls the graph cycle
-    """
+    """Review content drafts and score them against quality criteria."""
     brand = state["brand_profile"]
     drafts = state.get("drafts", {})
     revision_count = state.get("revision_count", 0)
@@ -37,7 +30,7 @@ async def critic_node(state: dict[str, Any]) -> dict[str, Any]:
         return {
             "critic_scores": {},
             "critic_summary": "No drafts to review.",
-            "approved": True,  # Nothing to reject
+            "approved": True,
         }
 
     system_prompt = CRITIC_PROMPT.format(
@@ -59,10 +52,10 @@ async def critic_node(state: dict[str, Any]) -> dict[str, Any]:
 
 Score each draft and determine if it passes the quality gate (>= 7.0)."""
 
-    llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
-        temperature=0.3,  # Lower temperature for consistent scoring
-        max_tokens=2048,
+    llm_cfg = state["llm_config"]
+    llm = create_llm(
+        provider=llm_cfg["provider"], api_key=llm_cfg["api_key"],
+        model=llm_cfg["model"], agent_name="critic",
     )
 
     messages = [
@@ -71,42 +64,31 @@ Score each draft and determine if it passes the quality gate (>= 7.0)."""
     ]
 
     response = await llm.ainvoke(messages)
+    data = parse_json_response(response.content)
 
     # Parse critic response
     critic_scores: dict[str, dict[str, Any]] = {}
-    critic_summary = ""
+    raw_summary = data.get("summary", "")
+    critic_summary = raw_summary if isinstance(raw_summary, str) else json.dumps(raw_summary)
     all_approved = True
 
-    try:
-        content = response.content
-        if isinstance(content, list):
-            content = " ".join(
-                block.get("text", "") for block in content if isinstance(block, dict)
+    scores_list = data.get("scores", [])
+    for score in scores_list:
+        platform = score.get("platform", "unknown")
+        if "overall_score" not in score:
+            score["overall_score"] = (
+                score.get("brand_voice_score", 5) * 0.3
+                + score.get("engagement_score", 5) * 0.3
+                + score.get("platform_fit_score", 5) * 0.2
+                + score.get("clarity_score", 5) * 0.2
             )
+        score["approved"] = score["overall_score"] >= APPROVAL_THRESHOLD
+        if not score["approved"]:
+            all_approved = False
+        critic_scores[platform] = score
 
-        json_str = _extract_json(content)
-        if json_str:
-            data = json.loads(json_str)
-            scores_list = data.get("scores", [])
-            critic_summary = data.get("summary", "")
-
-            for score in scores_list:
-                platform = score.get("platform", "unknown")
-                # Calculate overall score if not provided
-                if "overall_score" not in score:
-                    score["overall_score"] = (
-                        score.get("brand_voice_score", 5) * 0.3
-                        + score.get("engagement_score", 5) * 0.3
-                        + score.get("platform_fit_score", 5) * 0.2
-                        + score.get("clarity_score", 5) * 0.2
-                    )
-                score["approved"] = score["overall_score"] >= APPROVAL_THRESHOLD
-                if not score["approved"]:
-                    all_approved = False
-                critic_scores[platform] = score
-    except (json.JSONDecodeError, TypeError) as e:
-        logger.warning("Failed to parse critic response as JSON: %s", e)
-        # If we can't parse, approve to avoid infinite loop
+    # If parsing returned nothing, auto-approve to avoid infinite loop
+    if not data:
         all_approved = True
         critic_summary = "Could not parse critic response — auto-approving."
 
@@ -131,25 +113,3 @@ Score each draft and determine if it passes the quality gate (>= 7.0)."""
         "approved": all_approved,
         "messages": [response],
     }
-
-
-def _sanitize_json(text: str) -> str:
-    """Fix common LLM JSON issues: control chars inside strings."""
-    return re.sub(r'(?<=": ")(.*?)(?=")', lambda m: m.group(0).replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t'), text, flags=re.DOTALL)
-
-
-def _extract_json(text: str) -> str | None:
-    """Extract a JSON object from text that may contain markdown fences."""
-    if "```json" in text:
-        start = text.index("```json") + 7
-        end = text.index("```", start)
-        return _sanitize_json(text[start:end].strip())
-    if "```" in text:
-        start = text.index("```") + 3
-        end = text.index("```", start)
-        return _sanitize_json(text[start:end].strip())
-    brace_start = text.find("{")
-    brace_end = text.rfind("}")
-    if brace_start != -1 and brace_end != -1:
-        return _sanitize_json(text[brace_start : brace_end + 1])
-    return None

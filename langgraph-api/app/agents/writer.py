@@ -4,26 +4,19 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from typing import Any
 
-from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.llm_factory import create_llm
 from app.prompts import WRITER_PROMPT
+from app.response_parser import parse_json_response
 
 logger = logging.getLogger(__name__)
 
 
 async def writer_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Write platform-specific social media content.
-
-    This node:
-    1. Takes the content plan and brand context
-    2. Generates platform-native content (different for each platform)
-    3. On revision cycles, incorporates critic feedback
-    4. Returns drafts keyed by platform
-    """
+    """Write platform-specific social media content."""
     brand = state["brand_profile"]
     content_request = state["content_request"]
     content_plan = state.get("content_plan", {})
@@ -65,7 +58,11 @@ async def writer_node(state: dict[str, Any]) -> dict[str, Any]:
             selected_angles=selected_angles,
         )
 
-    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.8, max_tokens=4096)
+    llm_cfg = state["llm_config"]
+    llm = create_llm(
+        provider=llm_cfg["provider"], api_key=llm_cfg["api_key"],
+        model=llm_cfg["model"], agent_name="writer",
+    )
 
     messages = [
         SystemMessage(content=system_prompt),
@@ -73,31 +70,46 @@ async def writer_node(state: dict[str, Any]) -> dict[str, Any]:
     ]
 
     response = await llm.ainvoke(messages)
+    data = parse_json_response(response.content)
+
+    logger.debug("Writer raw parsed data keys: %s", list(data.keys()))
 
     # Parse drafts from response
     drafts: dict[str, dict[str, Any]] = {}
+    raw_drafts = data.get("drafts", data)
+    for platform in target_platforms:
+        if platform in raw_drafts:
+            draft = raw_drafts[platform]
+            logger.debug("Writer draft for %s keys: %s", platform, list(draft.keys()) if isinstance(draft, dict) else type(draft))
 
-    try:
-        content = response.content
-        if isinstance(content, list):
-            content = " ".join(
-                block.get("text", "") for block in content if isinstance(block, dict)
-            )
+            # Some providers nest content under different keys
+            if isinstance(draft, dict) and not draft.get("content"):
+                # Try common alternative keys
+                for alt_key in ("caption", "text", "body", "post", "copy"):
+                    if alt_key in draft:
+                        draft["content"] = draft[alt_key]
+                        break
 
-        json_str = _extract_json(content)
-        if json_str:
-            data = json.loads(json_str)
-            raw_drafts = data.get("drafts", data)
-            for platform in target_platforms:
-                if platform in raw_drafts:
-                    draft = raw_drafts[platform]
-                    # Ensure character count is set
-                    if "character_count" not in draft or draft["character_count"] == 0:
-                        draft["character_count"] = len(draft.get("content", ""))
-                    draft["platform"] = platform
-                    drafts[platform] = draft
-    except (json.JSONDecodeError, TypeError) as e:
-        logger.warning("Failed to parse writer response as JSON: %s", e)
+                # If still no content, try joining sub-posts (carousel/thread)
+                if not draft.get("content"):
+                    for key in ("posts", "slides", "items", "thread"):
+                        if isinstance(draft.get(key), list):
+                            parts = []
+                            for item in draft[key]:
+                                if isinstance(item, str):
+                                    parts.append(item)
+                                elif isinstance(item, dict):
+                                    parts.append(item.get("content", item.get("caption", item.get("text", str(item)))))
+                            draft["content"] = "\n\n---\n\n".join(parts)
+                            break
+
+            if isinstance(draft, str):
+                draft = {"content": draft}
+
+            if "character_count" not in draft or draft.get("character_count", 0) == 0:
+                draft["character_count"] = len(draft.get("content", ""))
+            draft["platform"] = platform
+            drafts[platform] = draft
 
     logger.info(
         "Writer generated drafts for %d platforms (revision #%d)",
@@ -160,26 +172,3 @@ Target Platforms: {', '.join(target_platforms)}
 Revise ONLY the drafts that scored below 7.0. For approved drafts (>= 7.0), \
 return them unchanged. Address EACH piece of feedback specifically — don't \
 just rephrase the same content."""
-
-
-def _sanitize_json(text: str) -> str:
-    """Fix common LLM JSON issues: control chars inside strings."""
-    # Replace literal newlines/tabs inside JSON string values with escaped versions
-    return re.sub(r'(?<=": ")(.*?)(?=")', lambda m: m.group(0).replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t'), text, flags=re.DOTALL)
-
-
-def _extract_json(text: str) -> str | None:
-    """Extract a JSON object from text that may contain markdown fences."""
-    if "```json" in text:
-        start = text.index("```json") + 7
-        end = text.index("```", start)
-        return _sanitize_json(text[start:end].strip())
-    if "```" in text:
-        start = text.index("```") + 3
-        end = text.index("```", start)
-        return _sanitize_json(text[start:end].strip())
-    brace_start = text.find("{")
-    brace_end = text.rfind("}")
-    if brace_start != -1 and brace_end != -1:
-        return _sanitize_json(text[brace_start : brace_end + 1])
-    return None

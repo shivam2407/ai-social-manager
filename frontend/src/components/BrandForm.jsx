@@ -49,7 +49,7 @@ export default function BrandForm({ initial, onSubmit, submitLabel = "Save" }) {
         </label>
         <input
           className={inputClass}
-          placeholder="Acme Corp"
+          placeholder="e.g. Sunrise Bakery"
           value={form.brand_name}
           onChange={(e) => set("brand_name", e.target.value)}
         />
@@ -63,7 +63,7 @@ export default function BrandForm({ initial, onSubmit, submitLabel = "Save" }) {
           </label>
           <input
             className={inputClass}
-            placeholder="Developer tools"
+            placeholder="e.g. Fitness, Food, Fashion"
             value={form.niche}
             onChange={(e) => set("niche", e.target.value)}
           />
@@ -74,7 +74,7 @@ export default function BrandForm({ initial, onSubmit, submitLabel = "Save" }) {
           </label>
           <input
             className={inputClass}
-            placeholder="Software developers"
+            placeholder="e.g. Young professionals, parents"
             value={form.target_audience}
             onChange={(e) => set("target_audience", e.target.value)}
           />
