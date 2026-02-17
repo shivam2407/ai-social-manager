@@ -20,13 +20,13 @@ if _raw_url.startswith("postgres://") or _raw_url.startswith("postgresql://"):
         "postgres://", "postgresql+asyncpg://", 1
     )
 
-    # asyncpg does not accept 'sslmode' query param — strip it and pass ssl
-    # via connect_args instead.
+    # asyncpg does not accept libpq-style query params (sslmode,
+    # channel_binding, etc.).  Strip ALL query params from the URL and
+    # enable SSL via connect_args when the original URL requested it.
     _parsed = urlparse(DATABASE_URL)
     _params = parse_qs(_parsed.query)
-    _sslmode = _params.pop("sslmode", [None])[0]
-    _clean_query = urlencode({k: v[0] for k, v in _params.items()})
-    DATABASE_URL = urlunparse(_parsed._replace(query=_clean_query))
+    _sslmode = _params.get("sslmode", [None])[0]
+    DATABASE_URL = urlunparse(_parsed._replace(query=""))
 
     _connect_args: dict = {}
     if _sslmode and _sslmode != "disable":
