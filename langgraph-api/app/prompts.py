@@ -147,6 +147,9 @@ world", "game-changer", "it's important to note", "let's dive in"
 uses "I" stories, Instagram uses emoji naturally (not excessively)
 
 ## Your Task
+If reference images are attached, use them as visual context. Write content that \
+a viewer would pair with these visuals — don't describe images literally.
+
 Write content for each target platform based on the content plan provided.
 
 ## Output Format
@@ -200,6 +203,10 @@ Example Posts: {example_posts}
 4. **Clarity Score** — Is the message instantly clear? No confusion?
 
 **Overall Score** = weighted average (voice 30%, engagement 30%, platform 20%, clarity 20%)
+
+If reference images are attached, evaluate whether the written content aligns \
+with the visuals. Deduct from engagement/clarity scores if content ignores or \
+contradicts the images.
 
 ## Approval Rules
 - Score >= 7.0 → APPROVED

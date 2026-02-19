@@ -58,10 +58,16 @@ Score each draft and determine if it passes the quality gate (>= 7.0)."""
         model=llm_cfg["model"], agent_name="critic",
     )
 
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_message),
-    ]
+    reference_images = state.get("reference_images", [])
+    if reference_images:
+        content_blocks = [{"type": "text", "text": user_message}]
+        for img_uri in reference_images:
+            content_blocks.append({"type": "image_url", "image_url": {"url": img_uri}})
+        human_msg = HumanMessage(content=content_blocks)
+    else:
+        human_msg = HumanMessage(content=user_message)
+
+    messages = [SystemMessage(content=system_prompt), human_msg]
 
     response = await llm.ainvoke(messages)
     data = parse_json_response(response.content)

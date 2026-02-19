@@ -1,7 +1,74 @@
 import PlatformBadge from "./PlatformBadge";
 import ScoreRing from "./ScoreRing";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Image, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
+
+function CarouselSlides({ slides, imagePrompt }) {
+  const [active, setActive] = useState(0);
+
+  const prev = () => setActive((i) => Math.max(0, i - 1));
+  const next = () => setActive((i) => Math.min(slides.length - 1, i + 1));
+
+  return (
+    <div className="space-y-3">
+      {/* Slide viewport */}
+      <div className="relative rounded-lg border border-gray-800 bg-gray-950/60 overflow-hidden">
+        {/* Image prompt placeholder */}
+        {imagePrompt && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/40 border-b border-gray-800 text-[11px] text-gray-500">
+            <Image className="w-3.5 h-3.5 shrink-0 text-gray-600" />
+            <span className="truncate">{imagePrompt}</span>
+          </div>
+        )}
+
+        {/* Slide content */}
+        <div className="px-4 py-3 min-h-[80px]">
+          <div className="text-xs text-violet-400/70 font-medium mb-1.5">
+            Slide {active + 1} of {slides.length}
+          </div>
+          <div className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">
+            {slides[active]}
+          </div>
+        </div>
+
+        {/* Nav arrows */}
+        {slides.length > 1 && (
+          <>
+            <button
+              onClick={prev}
+              disabled={active === 0}
+              className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-gray-800/80 border border-gray-700 flex items-center justify-center text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-default transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={next}
+              disabled={active === slides.length - 1}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-gray-800/80 border border-gray-700 flex items-center justify-center text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-default transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Dot indicators */}
+      {slides.length > 1 && (
+        <div className="flex items-center justify-center gap-1.5">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setActive(i)}
+              className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                i === active ? "bg-violet-400" : "bg-gray-700 hover:bg-gray-600"
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function PostCard({ post }) {
   const [copied, setCopied] = useState(false);
@@ -12,6 +79,11 @@ export default function PostCard({ post }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const isCarousel = post.content_type === "carousel";
+  const slides = isCarousel
+    ? post.content.split(/\n{0,2}---\n{0,2}/).map((s) => s.trim()).filter(Boolean)
+    : [];
+
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5 space-y-4">
       {/* Header */}
@@ -21,9 +93,13 @@ export default function PostCard({ post }) {
       </div>
 
       {/* Content */}
-      <div className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">
-        {post.content}
-      </div>
+      {isCarousel && slides.length > 1 ? (
+        <CarouselSlides slides={slides} imagePrompt={post.image_prompt} />
+      ) : (
+        <div className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">
+          {post.content}
+        </div>
+      )}
 
       {/* Hashtags */}
       {post.hashtags?.length > 0 && (

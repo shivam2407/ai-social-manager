@@ -3,6 +3,7 @@ import { Trash2, ChevronDown, ChevronUp, Clock } from "lucide-react";
 import { getHistoryApi, clearHistoryApi } from "../api";
 import PostCard from "../components/PostCard";
 import PlatformBadge from "../components/PlatformBadge";
+import MarkdownText from "../components/MarkdownText";
 
 const PLATFORMS_ALL = ["all", "twitter", "linkedin", "instagram"];
 
@@ -130,9 +131,9 @@ export default function History() {
                       <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
                         Critic Summary
                       </h4>
-                      <p className="text-sm text-gray-300">
-                        {item.critic_summary}
-                      </p>
+                      <div className="text-sm text-gray-300 leading-relaxed">
+                        <MarkdownText text={item.critic_summary} />
+                      </div>
                     </div>
                   )}
                   <div className="grid grid-cols-1 gap-3 pt-2">

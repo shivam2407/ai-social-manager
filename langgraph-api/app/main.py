@@ -170,6 +170,7 @@ async def generate_content(
         "content_request": request.content_request,
         "target_platforms": [p.value for p in request.target_platforms],
         "llm_config": llm_config,
+        "reference_images": request.images,
         "messages": [],
         "trending_topics": [],
         "competitor_insights": [],

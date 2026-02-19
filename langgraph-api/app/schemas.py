@@ -6,7 +6,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+import re
+
+from pydantic import BaseModel, Field, field_validator
 
 
 # --- Enums ---
@@ -150,6 +152,22 @@ class GenerateRequest(BaseModel):
         min_length=1,
         max_length=3,
     )
+    images: list[str] = Field(
+        default_factory=list,
+        max_length=4,
+        description="Up to 4 reference images as data URIs",
+    )
+
+    @field_validator("images")
+    @classmethod
+    def validate_images(cls, v: list[str]) -> list[str]:
+        _DATA_URI_RE = re.compile(r"^data:image/(jpeg|png|webp|gif);base64,")
+        for img in v:
+            if not _DATA_URI_RE.match(img):
+                raise ValueError("Each image must be a data:image/(jpeg|png|webp|gif);base64,... URI")
+            if len(img) > 7_000_000:
+                raise ValueError("Each image must be ≤ 7MB as a data URI (~5MB binary)")
+        return v
 
 
 class GenerateResponse(BaseModel):

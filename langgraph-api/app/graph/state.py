@@ -24,6 +24,7 @@ class SocialMediaState(TypedDict):
     content_request: str                    # user's content brief
     target_platforms: list[str]             # ["twitter", "linkedin", ...]
     llm_config: dict[str, str]             # {"provider", "api_key", "model"}
+    reference_images: list[str]             # data URI strings for vision input
 
     # ── Agent messages (accumulated via reducer) ───────────────────
     messages: Annotated[list[BaseMessage], add_messages]
