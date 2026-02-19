@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+node_modules/
+.env
+.env.*
+.git/
+.claude/
+*.log
+.pytest_cache/
+langgraph-api/data/
+frontend/dist/
+mockup.html
