@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Zap, Loader2 } from "lucide-react";
 import { registerApi } from "../api";
 import { useAuth } from "../context/AuthContext";
+import OAuthButtons from "../components/OAuthButtons";
 
 export default function Register() {
   const [email, setEmail] = useState("");
@@ -45,6 +46,8 @@ export default function Register() {
           </div>
           <p className="text-sm text-gray-500">Create your account</p>
         </div>
+
+        <OAuthButtons onError={setError} />
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Zap, Loader2 } from "lucide-react";
-import { loginApi } from "../api";
+import { loginApi, githubAuthApi } from "../api";
 import { useAuth } from "../context/AuthContext";
+import OAuthButtons from "../components/OAuthButtons";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -11,6 +12,27 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Handle GitHub OAuth callback
+  useEffect(() => {
+    const code = searchParams.get("code");
+    if (!code) return;
+
+    // Remove code from URL to prevent re-processing
+    setSearchParams({}, { replace: true });
+
+    setLoading(true);
+    githubAuthApi(code)
+      .then((data) => {
+        login(data.access_token, data.user);
+        navigate("/");
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -40,6 +62,8 @@ export default function Login() {
           </div>
           <p className="text-sm text-gray-500">Sign in to your account</p>
         </div>
+
+        <OAuthButtons onError={setError} />
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

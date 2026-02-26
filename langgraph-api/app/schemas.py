@@ -201,6 +201,14 @@ class TokenResponse(BaseModel):
     user: UserResponse
 
 
+class GoogleAuthRequest(BaseModel):
+    id_token: str = Field(min_length=1)
+
+
+class GitHubAuthRequest(BaseModel):
+    code: str = Field(min_length=1)
+
+
 # --- Brand CRUD ---
 
 class BrandProfileCreate(BaseModel):

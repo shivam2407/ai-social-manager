@@ -46,6 +46,24 @@ export async function loginApi(email, password) {
   return handleResponse(res, { redirectOn401: false });
 }
 
+export async function googleAuthApi(idToken) {
+  const res = await fetch(`${BASE}/api/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id_token: idToken }),
+  });
+  return handleResponse(res, { redirectOn401: false });
+}
+
+export async function githubAuthApi(code) {
+  const res = await fetch(`${BASE}/api/auth/github`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  return handleResponse(res, { redirectOn401: false });
+}
+
 export async function getMe(token) {
   const res = await fetch(`${BASE}/api/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
