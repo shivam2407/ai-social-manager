@@ -20,7 +20,7 @@ const links = [
   { to: "/settings", icon: Key, label: "API Keys", onboarding: "api-keys-link" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ onClose }) {
   const { user, logout } = useAuth();
   const { state: onboardingState, replay } = useOnboarding();
   const showReplay = onboardingState === "IDLE" && user?.onboarding_completed;
@@ -43,6 +43,7 @@ export default function Sidebar() {
             to={to}
             end={to === "/"}
             data-onboarding={onboarding || undefined}
+            onClick={onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 isActive

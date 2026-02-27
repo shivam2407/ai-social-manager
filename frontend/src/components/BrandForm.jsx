@@ -56,7 +56,7 @@ export default function BrandForm({ initial, onSubmit, submitLabel = "Save" }) {
       </div>
 
       {/* Niche + Audience */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-medium text-gray-400 mb-1.5">
             Niche

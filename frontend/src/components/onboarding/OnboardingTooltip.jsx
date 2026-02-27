@@ -10,15 +10,20 @@ function getTooltipStyle(rect, position) {
   if (!rect) return { opacity: 0 };
 
   const vw = window.innerWidth;
+  const isMobile = vw < 640;
+  const tooltipW = isMobile ? vw - MARGIN * 2 : TOOLTIP_W;
 
-  switch (position) {
+  // On mobile, "right" position falls back to "bottom" since sidebar is a drawer
+  const effectivePosition = isMobile && position === "right" ? "bottom" : position;
+
+  switch (effectivePosition) {
     case "right": {
       let left = rect.left + rect.width + OFFSET;
       // If tooltip would overflow right edge, flip to bottom
-      if (left + TOOLTIP_W > vw - MARGIN) {
+      if (left + tooltipW > vw - MARGIN) {
         return {
           top: rect.top + rect.height + OFFSET,
-          left: Math.max(MARGIN, Math.min(rect.left, vw - TOOLTIP_W - MARGIN)),
+          left: Math.max(MARGIN, Math.min(rect.left, vw - tooltipW - MARGIN)),
         };
       }
       return {
@@ -28,8 +33,8 @@ function getTooltipStyle(rect, position) {
       };
     }
     case "bottom": {
-      let left = rect.left + rect.width / 2 - TOOLTIP_W / 2;
-      left = Math.max(MARGIN, Math.min(left, vw - TOOLTIP_W - MARGIN));
+      let left = rect.left + rect.width / 2 - tooltipW / 2;
+      left = Math.max(MARGIN, Math.min(left, vw - tooltipW - MARGIN));
       return {
         top: rect.top + rect.height + OFFSET,
         left,
@@ -43,8 +48,8 @@ function getTooltipStyle(rect, position) {
       };
     }
     case "top": {
-      let left = rect.left + rect.width / 2 - TOOLTIP_W / 2;
-      left = Math.max(MARGIN, Math.min(left, vw - TOOLTIP_W - MARGIN));
+      let left = rect.left + rect.width / 2 - tooltipW / 2;
+      left = Math.max(MARGIN, Math.min(left, vw - tooltipW - MARGIN));
       return {
         bottom: window.innerHeight - rect.top + OFFSET,
         left,
@@ -139,6 +144,9 @@ export default function OnboardingTooltip({ step, onAction, onClose }) {
 
   if (!rect) return null;
 
+  const isMobile = window.innerWidth < 640;
+  const effectivePosition = isMobile && step.position === "right" ? "bottom" : step.position;
+
   const style = {
     ...getTooltipStyle(rect, step.position),
     opacity: visible ? 1 : 0,
@@ -147,10 +155,10 @@ export default function OnboardingTooltip({ step, onAction, onClose }) {
 
   return (
     <div
-      className="fixed z-[1002] w-72 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-5"
+      className="fixed z-[1002] w-72 max-sm:w-[calc(100vw-2rem)] bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-5"
       style={style}
     >
-      <Arrow position={step.position} />
+      <Arrow position={effectivePosition} />
 
       {/* Close button */}
       <button

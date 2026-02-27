@@ -9,7 +9,7 @@ const stages = [
 
 export default function PipelineStatus({ activeStage, completed }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap">
       {stages.map(({ key, icon: Icon, label }, i) => {
         const isActive = activeStage === key;
         const isDone = completed?.includes(key);

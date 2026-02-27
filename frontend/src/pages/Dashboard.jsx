@@ -39,7 +39,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* API Status */}
         <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5">
           <div className="flex items-center gap-3 mb-3">
