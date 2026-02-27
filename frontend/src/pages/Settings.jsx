@@ -8,6 +8,7 @@ import {
   FlaskConical,
   AlertTriangle,
   Star,
+  Sparkles,
 } from "lucide-react";
 import {
   getProviders,
@@ -44,6 +45,7 @@ export default function Settings() {
   const [deleting, setDeleting] = useState({});
   const [loading, setLoading] = useState(true);
   const [defaultPrompt, setDefaultPrompt] = useState(null); // provider name to prompt for
+  const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
   const onboarding = useOnboarding();
 
   useEffect(() => {
@@ -67,6 +69,16 @@ export default function Settings() {
   }, []);
 
   const hasDefault = savedKeys.some((k) => k.is_default);
+
+  // Show onboarding banner when the add-api-key step is active
+  useEffect(() => {
+    if (
+      onboarding.currentStep?.id === "add-api-key" &&
+      (onboarding.state === "ACTIVE" || onboarding.state === "WAITING")
+    ) {
+      setShowOnboardingBanner(true);
+    }
+  }, [onboarding.currentStep, onboarding.state]);
 
   const updateDraft = (provider, field, value) => {
     setDrafts((prev) => ({
@@ -119,6 +131,7 @@ export default function Settings() {
         [provider]: { ...prev[provider], api_key: "" },
       }));
       if (keys.some((k) => k.is_default)) {
+        setShowOnboardingBanner(false);
         onboarding.signal("default-key-set");
       } else if (onboarding.isActive) {
         // Key saved but no default yet — prompt user during onboarding
@@ -189,6 +202,26 @@ export default function Settings() {
         </p>
       </div>
 
+      {showOnboardingBanner && (
+        <div className="flex items-start gap-3 bg-violet-500/10 border border-violet-500/20 text-violet-300 text-sm rounded-xl px-4 py-3">
+          <Sparkles className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="flex-1 space-y-1">
+            <p className="font-medium text-violet-200">Step 2 of 3 — Connect an AI provider</p>
+            <p className="text-xs text-violet-300/80">
+              Pick any provider below, paste your API key, save it, and set it as default.
+              Just want to try things out? Use the <span className="font-semibold text-violet-200">Mock (Testing)</span> provider
+              with any dummy key — it generates sample data with no real API needed.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowOnboardingBanner(false)}
+            className="text-violet-400 hover:text-violet-300 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {!hasDefault && savedKeys.length > 0 && (
         <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -206,7 +239,7 @@ export default function Settings() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {providers.map((prov, provIndex) => {
+        {providers.map((prov) => {
           const p = prov.provider;
           const colors = PROVIDER_COLORS[p] || PROVIDER_COLORS.claude;
           const saved = savedKeys.find((k) => k.provider === p);
@@ -216,7 +249,6 @@ export default function Settings() {
           return (
             <div
               key={p}
-              data-onboarding={provIndex === 0 ? "provider-card-first" : undefined}
               className={`rounded-xl border ${colors.border} ${colors.bg} p-5 space-y-4`}
             >
               {/* Header */}

@@ -39,21 +39,15 @@ export const STEPS = [
     // No page constraint — sidebar link is visible on every page
     stepLabel: "Step 2 of 3",
     title: "Now connect an AI provider",
-    body: "You need an API key from at least one LLM provider (Claude, Gemini, or others) to power content generation.",
+    body: "Add an API key from any LLM provider to power generation. Or use the Mock provider with a dummy key to try it out first.",
     cta: "Go to API Keys →",
     advanceTo: "/settings",
   },
   {
     id: "add-api-key",
-    type: "tooltip",
-    selector: '[data-onboarding="provider-card-first"]',
-    position: "bottom",
+    type: "banner",
     milestone: 2,
     page: "/settings",
-    stepLabel: "Step 2 of 3",
-    title: "Add your API key",
-    body: 'Paste your API key, click Save, and set it as default. Tip: the "Mock (Testing)" provider works without a real key.',
-    subtitle: "Save a key and set one as default to continue",
     advanceOn: "default-key-set",
   },
   {
