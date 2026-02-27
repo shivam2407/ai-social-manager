@@ -30,6 +30,7 @@ export default function Dashboard() {
         </div>
         <Link
           to="/generate"
+          data-onboarding="quick-generate-btn"
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition-colors"
         >
           <Sparkles className="w-4 h-4" />

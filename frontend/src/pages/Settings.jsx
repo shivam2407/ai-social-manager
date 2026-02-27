@@ -16,6 +16,7 @@ import {
   deleteApiKey,
   testApiKey,
 } from "../api";
+import useOnboarding from "../components/onboarding/useOnboarding";
 
 const PROVIDER_COLORS = {
   claude: { bg: "bg-orange-500/10", border: "border-orange-500/30", text: "text-orange-400" },
@@ -42,6 +43,8 @@ export default function Settings() {
   const [saving, setSaving] = useState({});
   const [deleting, setDeleting] = useState({});
   const [loading, setLoading] = useState(true);
+  const [defaultPrompt, setDefaultPrompt] = useState(null); // provider name to prompt for
+  const onboarding = useOnboarding();
 
   useEffect(() => {
     Promise.all([getProviders(), getApiKeys()])
@@ -115,6 +118,12 @@ export default function Settings() {
         ...prev,
         [provider]: { ...prev[provider], api_key: "" },
       }));
+      if (keys.some((k) => k.is_default)) {
+        onboarding.signal("default-key-set");
+      } else if (onboarding.isActive) {
+        // Key saved but no default yet — prompt user during onboarding
+        setDefaultPrompt(provider);
+      }
     } catch {
       // error handled by api.js
     } finally {
@@ -136,6 +145,12 @@ export default function Settings() {
     }
   };
 
+  const handleConfirmDefault = async () => {
+    if (!defaultPrompt) return;
+    await handleSetDefault(defaultPrompt);
+    setDefaultPrompt(null);
+  };
+
   const handleSetDefault = async (provider) => {
     const saved = savedKeys.find((k) => k.provider === provider);
     if (!saved) return;
@@ -148,6 +163,7 @@ export default function Settings() {
       });
       const keys = await getApiKeys();
       setSavedKeys(keys);
+      if (keys.some((k) => k.is_default)) onboarding.signal("default-key-set");
     } catch {
       // error handled by api.js
     } finally {
@@ -190,7 +206,7 @@ export default function Settings() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {providers.map((prov) => {
+        {providers.map((prov, provIndex) => {
           const p = prov.provider;
           const colors = PROVIDER_COLORS[p] || PROVIDER_COLORS.claude;
           const saved = savedKeys.find((k) => k.provider === p);
@@ -200,6 +216,7 @@ export default function Settings() {
           return (
             <div
               key={p}
+              data-onboarding={provIndex === 0 ? "provider-card-first" : undefined}
               className={`rounded-xl border ${colors.border} ${colors.bg} p-5 space-y-4`}
             >
               {/* Header */}
@@ -333,6 +350,33 @@ export default function Settings() {
           );
         })}
       </div>
+
+      {/* "Set as default?" prompt during onboarding */}
+      {defaultPrompt && (
+        <div className="fixed inset-0 z-[1010] flex items-center justify-center bg-black/60">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-sm w-full mx-4 space-y-4">
+            <h3 className="text-sm font-semibold text-white">Set as default provider?</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Your <span className="text-white font-medium">{PROVIDER_LABELS[defaultPrompt] || defaultPrompt}</span> key
+              was saved. Set it as the default provider for content generation?
+            </p>
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                onClick={handleConfirmDefault}
+                className="flex-1 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium transition-colors"
+              >
+                Yes, set as default
+              </button>
+              <button
+                onClick={() => setDefaultPrompt(null)}
+                className="flex-1 py-2 rounded-lg border border-gray-700 text-gray-400 hover:text-gray-200 text-xs font-medium transition-colors"
+              >
+                Not now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

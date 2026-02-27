@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Sparkles, X } from "lucide-react";
 import { generateContent, getBrands, getApiKeys } from "../api";
 import StepIndicator from "../components/StepIndicator";
 import StepSelectBrand from "../components/StepSelectBrand";
 import StepCompose from "../components/StepCompose";
 import StepResults from "../components/StepResults";
+import useOnboarding from "../components/onboarding/useOnboarding";
 
 const stageTimings = [
   { key: "research", delay: 0 },
@@ -30,8 +31,10 @@ export default function Generate() {
   const [activeStage, setActiveStage] = useState(null);
   const [completedStages, setCompletedStages] = useState([]);
   const [hasDefaultKey, setHasDefaultKey] = useState(true);
+  const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
 
   const timersRef = useRef([]);
+  const onboarding = useOnboarding();
 
   const selectedBrand = brands.find((b) => b.id === selectedBrandId);
 
@@ -54,6 +57,16 @@ export default function Generate() {
       .then((keys) => setHasDefaultKey(keys.some((k) => k.is_default)))
       .catch(() => setHasDefaultKey(false));
   }, []);
+
+  // Show onboarding banner if tutorial is active on generate page
+  useEffect(() => {
+    if (
+      onboarding.currentStep?.id === "generate-banner" &&
+      (onboarding.state === "ACTIVE" || onboarding.state === "WAITING")
+    ) {
+      setShowOnboardingBanner(true);
+    }
+  }, [onboarding.currentStep, onboarding.state]);
 
   const togglePlatform = (p) =>
     setPlatforms((prev) =>
@@ -109,6 +122,8 @@ export default function Generate() {
       setResult(data);
       setActiveStage(null);
       setCompletedStages(stageTimings.map((s) => s.key));
+      setShowOnboardingBanner(false);
+      onboarding.signal("generation-complete");
     } catch (err) {
       setError(err.message);
       setActiveStage(null);
@@ -152,6 +167,22 @@ export default function Generate() {
           posts.
         </p>
       </div>
+
+      {showOnboardingBanner && (
+        <div className="flex items-center gap-3 bg-violet-500/10 border border-violet-500/20 text-violet-300 text-sm rounded-xl px-4 py-3">
+          <Sparkles className="w-4 h-4 shrink-0" />
+          <span className="flex-1">
+            Follow the steps: select your brand, write a prompt, and hit
+            Generate. We'll handle the rest.
+          </span>
+          <button
+            onClick={() => setShowOnboardingBanner(false)}
+            className="text-violet-400 hover:text-violet-300 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {!hasDefaultKey && (
         <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm">

@@ -41,7 +41,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     await db.refresh(user)
 
     token = create_access_token(user.id, user.email)
-    return TokenResponse(access_token=token, user=UserResponse(id=user.id, email=user.email))
+    return TokenResponse(access_token=token, user=UserResponse(id=user.id, email=user.email, onboarding_completed=user.onboarding_completed))
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -52,7 +52,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     token = create_access_token(user.id, user.email)
-    return TokenResponse(access_token=token, user=UserResponse(id=user.id, email=user.email))
+    return TokenResponse(access_token=token, user=UserResponse(id=user.id, email=user.email, onboarding_completed=user.onboarding_completed))
 
 
 @router.post("/google", response_model=TokenResponse)
@@ -60,7 +60,7 @@ async def google_auth(body: GoogleAuthRequest, db: AsyncSession = Depends(get_db
     info = await verify_google_id_token(body.id_token)
     user = await get_or_create_oauth_user(db, info["email"], "google", info["sub"])
     token = create_access_token(user.id, user.email)
-    return TokenResponse(access_token=token, user=UserResponse(id=user.id, email=user.email))
+    return TokenResponse(access_token=token, user=UserResponse(id=user.id, email=user.email, onboarding_completed=user.onboarding_completed))
 
 
 @router.post("/github", response_model=TokenResponse)
@@ -68,9 +68,9 @@ async def github_auth(body: GitHubAuthRequest, db: AsyncSession = Depends(get_db
     info = await exchange_github_code(body.code)
     user = await get_or_create_oauth_user(db, info["email"], "github", info["github_id"])
     token = create_access_token(user.id, user.email)
-    return TokenResponse(access_token=token, user=UserResponse(id=user.id, email=user.email))
+    return TokenResponse(access_token=token, user=UserResponse(id=user.id, email=user.email, onboarding_completed=user.onboarding_completed))
 
 
 @router.get("/me", response_model=UserResponse)
 async def me(user: User = Depends(get_current_user)):
-    return UserResponse(id=user.id, email=user.email)
+    return UserResponse(id=user.id, email=user.email, onboarding_completed=user.onboarding_completed)

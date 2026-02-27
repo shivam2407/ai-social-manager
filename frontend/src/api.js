@@ -183,6 +183,15 @@ export async function deleteApiKey(provider) {
   return handleResponse(res);
 }
 
+export async function updateOnboardingStatus(completed) {
+  const res = await fetch(`${BASE}/api/settings/onboarding`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ onboarding_completed: completed }),
+  });
+  return handleResponse(res);
+}
+
 export async function testApiKey(data) {
   const res = await fetch(`${BASE}/api/settings/api-keys/test`, {
     method: "POST",

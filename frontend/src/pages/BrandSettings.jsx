@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { Trash2, Edit2, Plus } from "lucide-react";
 import { getBrands, createBrand, updateBrand, deleteBrandApi } from "../api";
 import BrandForm from "../components/BrandForm";
+import useOnboarding from "../components/onboarding/useOnboarding";
 
 export default function BrandSettings() {
   const [profiles, setProfiles] = useState([]);
   const [editing, setEditing] = useState(null); // null = list, "new" | profile.id
   const [editData, setEditData] = useState(null);
+  const onboarding = useOnboarding();
 
   const refresh = () => {
     getBrands().then(setProfiles).catch(() => {});
@@ -18,7 +20,8 @@ export default function BrandSettings() {
 
   const handleSave = async (form) => {
     try {
-      if (editing === "new") {
+      const wasNew = editing === "new";
+      if (wasNew) {
         await createBrand(form);
       } else {
         await updateBrand(editing, form);
@@ -26,6 +29,7 @@ export default function BrandSettings() {
       refresh();
       setEditing(null);
       setEditData(null);
+      if (wasNew) onboarding.signal("brand-created");
     } catch {
       // ignore
     }
@@ -58,9 +62,11 @@ export default function BrandSettings() {
         </div>
         {!editing && (
           <button
+            data-onboarding="new-brand-btn"
             onClick={() => {
               setEditing("new");
               setEditData(null);
+              onboarding.enterWaiting();
             }}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition-colors"
           >

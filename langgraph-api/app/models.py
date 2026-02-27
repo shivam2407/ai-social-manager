@@ -22,6 +22,7 @@ class User(Base):
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     auth_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     auth_provider_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     brand_profiles: Mapped[list[BrandProfileDB]] = relationship(back_populates="user", cascade="all, delete-orphan")

@@ -18,6 +18,7 @@ from app.schemas import (
     ApiKeyResponse,
     ApiKeyTestRequest,
     ApiKeyTestResponse,
+    OnboardingUpdate,
     PROVIDER_DEFAULT_MODELS,
     PROVIDER_MODELS,
     ProviderInfo,
@@ -143,6 +144,17 @@ async def delete_api_key(
         raise HTTPException(status_code=404, detail="API key not found")
     await db.delete(row)
     await db.commit()
+
+
+@router.put("/onboarding")
+async def update_onboarding(
+    body: OnboardingUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    user.onboarding_completed = body.onboarding_completed
+    await db.commit()
+    return {"onboarding_completed": user.onboarding_completed}
 
 
 @router.post("/api-keys/test", response_model=ApiKeyTestResponse)

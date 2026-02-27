@@ -193,12 +193,17 @@ class LoginRequest(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: str
+    onboarding_completed: bool = False
 
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+class OnboardingUpdate(BaseModel):
+    onboarding_completed: bool
 
 
 class GoogleAuthRequest(BaseModel):

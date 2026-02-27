@@ -25,3 +25,59 @@
 .score-ring-animated {
   animation: score-fill 1s ease-out forwards;
 }
+
+/* Onboarding animations */
+@keyframes onboarding-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes onboarding-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(139,92,246,0.3), 0 0 20px rgba(139,92,246,0.15); }
+  50% { box-shadow: 0 0 0 6px rgba(139,92,246,0.4), 0 0 30px rgba(139,92,246,0.25); }
+}
+
+@keyframes onboarding-success-flash {
+  0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(16,185,129,0.3); }
+  100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+}
+
+@keyframes onboarding-confetti-fall {
+  0% { transform: translateY(0) translateX(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) translateX(var(--drift, 0px)) rotate(var(--rotation, 720deg)); opacity: 0; }
+}
+
+@keyframes onboarding-toast-slide-up {
+  from { opacity: 0; transform: translate(-50%, 20px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@keyframes onboarding-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.onboarding-fade-in {
+  animation: onboarding-fade-in 250ms ease-out;
+}
+
+.onboarding-glow {
+  animation: onboarding-glow-pulse 2s ease-in-out infinite;
+}
+
+.onboarding-success-flash {
+  animation: onboarding-success-flash 1s ease-in-out;
+}
+
+.onboarding-confetti {
+  animation: onboarding-confetti-fall 2.5s ease-in forwards;
+}
+
+.onboarding-toast-enter {
+  animation: onboarding-toast-slide-up 400ms ease-out;
+}
+
+.onboarding-pulse {
+  animation: onboarding-pulse 2s ease-in-out infinite;
+}
