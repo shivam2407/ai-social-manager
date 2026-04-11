@@ -242,9 +242,16 @@ async def generate_content(
                     content = json.dumps(content)
                 if not content:
                     # Try alternative keys different providers may use
-                    for key in ("caption", "text", "body", "post", "copy"):
-                        if post_data.get(key):
-                            content = post_data[key] if isinstance(post_data[key], str) else json.dumps(post_data[key])
+                    for key in ("caption", "text", "body", "post", "copy",
+                                "reel_caption", "reel_script", "reel",
+                                "reel_description", "main_caption",
+                                "story", "description"):
+                        val = post_data.get(key)
+                        if val and isinstance(val, str) and val.strip():
+                            content = val
+                            break
+                        elif val and isinstance(val, dict):
+                            content = json.dumps(val)
                             break
 
                 final_posts.append(FinalPost(
