@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import ssl as _ssl
 
+from sqlalchemy import text as _text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -48,11 +49,30 @@ class Base(DeclarativeBase):
 
 
 async def init_db() -> None:
-    """Create all tables if they don't exist."""
+    """Create all tables if they don't exist, and migrate new columns."""
     from app.models import Base as _  # noqa: F401 – ensure models are registered
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # ── Lightweight column migrations ────────────────────────────
+    # Add columns that were introduced after the initial schema.
+    # Each ALTER TABLE is wrapped in try/except so it's safe to run
+    # repeatedly — if the column already exists, it's a no-op.
+    _new_columns = [
+        ("generations", "idempotency_key", "VARCHAR(64)"),
+        ("generations", "raw_llm_responses", "TEXT"),  # JSON stored as TEXT
+    ]
+
+    async with engine.begin() as conn:
+        for table, column, col_type in _new_columns:
+            try:
+                await conn.execute(
+                    _text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+                )
+            except Exception:
+                # Column already exists — safe to ignore
+                pass
 
 
 async def get_db():
