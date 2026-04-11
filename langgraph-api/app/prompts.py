@@ -180,7 +180,7 @@ Return a JSON object:
     "drafts": {{
         "twitter": {{
             "platform": "twitter",
-            "content": "the actual post text",
+            "content": "the actual post/tweet text that gets published",
             "hashtags": ["relevant", "hashtags"],
             "call_to_action": "what you want people to do",
             "character_count": 240,
@@ -188,14 +188,28 @@ Return a JSON object:
             "image_prompt": "description for AI image generation if needed"
         }},
         "linkedin": {{ ... }},
-        "instagram": {{ ... }}
+        "instagram": {{
+            "platform": "instagram",
+            "content": "the actual caption text that gets published with the post/reel",
+            "hashtags": ["relevant", "hashtags"],
+            "call_to_action": "link in bio",
+            "character_count": 500,
+            "content_type": "carousel",
+            "image_prompt": "visual description"
+        }}
     }}
 }}
+
+CRITICAL: The "content" field MUST ALWAYS be the actual publishable text — the \
+caption, tweet, or post that the user will copy-paste into the platform. \
+Do NOT put reel scripts, shot breakdowns, video descriptions, or production \
+notes in "content". Those go in "image_prompt" if needed. The "content" field \
+is what the audience reads.
 
 ## Platform Limits
 - Twitter: 280 characters per tweet (for threads, write 3-5 tweets)
 - LinkedIn: 3000 characters (first ~150 chars visible before "see more")
-- Instagram: 2200 characters caption
+- Instagram: 2200 characters caption (write the CAPTION, not a reel script)
 
 If you receive critic feedback, revise your drafts addressing EACH piece of \
 feedback specifically. Show improvement, don't just rephrase.

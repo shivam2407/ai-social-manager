@@ -132,6 +132,7 @@ class FinalPost(BaseModel):
     critic_score: float = Field(default=0)
     status: PostStatus = Field(default=PostStatus.DRAFT)
     scheduled_at: Optional[datetime] = None
+    raw_data: dict = Field(default_factory=dict)
 
 
 # --- API Request/Response ---

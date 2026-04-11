@@ -84,8 +84,15 @@ async def writer_node(state: dict[str, Any]) -> dict[str, Any]:
     drafts: dict[str, dict[str, Any]] = {}
     raw_drafts = data.get("drafts", data)
     for platform in target_platforms:
-        if platform in raw_drafts:
-            draft = raw_drafts[platform]
+        # Exact match first, then fuzzy: "instagram_reel", "twitter_thread", etc.
+        draft = raw_drafts.get(platform)
+        if draft is None:
+            for key in raw_drafts:
+                if key.startswith(platform) or platform in key.lower():
+                    draft = raw_drafts[key]
+                    logger.info("Writer: matched key '%s' to platform '%s'", key, platform)
+                    break
+        if draft is not None:
             logger.info("Writer draft for %s keys: %s", platform, list(draft.keys()) if isinstance(draft, dict) else type(draft))
 
             # Some providers nest content under different keys
@@ -120,11 +127,42 @@ async def writer_node(state: dict[str, Any]) -> dict[str, Any]:
                             draft["content"] = sep.join(parts)
                             break
 
+                # Handle reel script / breakdown responses — extract visual
+                # descriptions as image_prompt, not as postable content
+                if not draft.get("content"):
+                    for key in ("breakdown", "scenes", "shots"):
+                        if isinstance(draft.get(key), list):
+                            # This is a video production script, not a caption.
+                            # Store it as image_prompt and flag it.
+                            scenes = []
+                            for item in draft[key]:
+                                if isinstance(item, dict):
+                                    ts = item.get("timestamp", "")
+                                    visual = item.get("visual", item.get("description", ""))
+                                    scenes.append(f"[{ts}] {visual}" if ts else visual)
+                                elif isinstance(item, str):
+                                    scenes.append(item)
+                            draft["image_prompt"] = "\n".join(scenes)
+                            # Use duration or any short string as placeholder content
+                            duration = draft.get("duration", "")
+                            draft["content"] = (
+                                f"[Reel script generated — no caption provided by LLM. "
+                                f"Duration: {duration}. See image_prompt for shot breakdown.]"
+                            )
+                            logger.warning(
+                                "Writer: %s draft is a reel script with no caption. "
+                                "Stored breakdown as image_prompt.",
+                                platform,
+                            )
+                            break
+
                 # Last resort: concatenate all string values in the draft
                 if not draft.get("content"):
                     string_vals = [v for k, v in draft.items()
                                    if isinstance(v, str) and v.strip()
-                                   and k not in ("platform", "content_type", "image_prompt")]
+                                   and k not in ("platform", "content_type",
+                                                 "image_prompt", "duration",
+                                                 "call_to_action")]
                     if string_vals:
                         draft["content"] = "\n\n".join(string_vals)
                         logger.warning(

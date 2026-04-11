@@ -262,6 +262,7 @@ async def generate_content(
                     content_type=post_data.get("content_type", "single_post"),
                     image_prompt=post_data.get("image_prompt", ""),
                     critic_score=post_data.get("critic_score", 0),
+                    raw_data=post_data,
                 ))
             except Exception as e:
                 logger.warning("Failed to parse post for %s: %s", platform_key, e)

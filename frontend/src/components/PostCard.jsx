@@ -1,6 +1,6 @@
 import PlatformBadge from "./PlatformBadge";
 import ScoreRing from "./ScoreRing";
-import { Copy, Check, Image, ChevronLeft, ChevronRight } from "lucide-react";
+import { Copy, Check, Image, ChevronLeft, ChevronRight, Film, Clock, Clapperboard } from "lucide-react";
 import { useState } from "react";
 
 function CarouselSlides({ slides, imagePrompt, labelPrefix = "Slide" }) {
@@ -70,6 +70,97 @@ function CarouselSlides({ slides, imagePrompt, labelPrefix = "Slide" }) {
   );
 }
 
+function ReelBreakdown({ breakdown, duration }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="rounded-lg border border-gray-800 bg-gray-950/60 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-3 py-2 bg-gray-800/40 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+      >
+        <Clapperboard className="w-3.5 h-3.5 shrink-0 text-violet-400" />
+        <span className="font-medium">Reel Script</span>
+        {duration && (
+          <span className="flex items-center gap-1 text-gray-500">
+            <Clock className="w-3 h-3" />
+            {duration}
+          </span>
+        )}
+        <span className="ml-auto text-gray-600">{expanded ? "▲" : "▼"}</span>
+      </button>
+
+      {expanded && (
+        <div className="px-3 py-2 space-y-2">
+          {breakdown.map((shot, i) => (
+            <div key={i} className="flex gap-2 text-xs">
+              {shot.timestamp && (
+                <span className="shrink-0 px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 font-mono">
+                  {shot.timestamp}
+                </span>
+              )}
+              <div className="space-y-0.5">
+                {shot.visual && (
+                  <p className="text-gray-300">{shot.visual || shot.description}</p>
+                )}
+                {shot.audio && (
+                  <p className="text-gray-500 italic">{shot.audio}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RawDataSection({ raw }) {
+  const [expanded, setExpanded] = useState(false);
+
+  // Collect extra fields not already shown by the card
+  const skip = new Set([
+    "platform", "content", "content_type", "hashtags",
+    "call_to_action", "image_prompt", "character_count",
+    "critic_score", "status", "scheduled_at",
+    "breakdown", "scenes", "shots", "duration",
+    "reel_caption", "reel_script", "reel_description",
+  ]);
+
+  const extras = Object.entries(raw).filter(
+    ([k, v]) => !skip.has(k) && v != null && v !== "" && !(Array.isArray(v) && v.length === 0)
+  );
+
+  if (extras.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-gray-800 bg-gray-950/60 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-3 py-2 bg-gray-800/40 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+      >
+        <Film className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
+        <span className="font-medium">Full LLM Output</span>
+        <span className="text-gray-600">({extras.length} fields)</span>
+        <span className="ml-auto text-gray-600">{expanded ? "▲" : "▼"}</span>
+      </button>
+
+      {expanded && (
+        <div className="px-3 py-2 space-y-1.5">
+          {extras.map(([key, val]) => (
+            <div key={key} className="text-xs">
+              <span className="text-cyan-400/70 font-medium">{key}: </span>
+              <span className="text-gray-300 whitespace-pre-wrap">
+                {typeof val === "string" ? val : JSON.stringify(val, null, 2)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PostCard({ post }) {
   const [copied, setCopied] = useState(false);
 
@@ -79,24 +170,27 @@ export default function PostCard({ post }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const raw = post.raw_data || {};
   const isCarousel = post.content_type === "carousel";
   const isThread = post.content_type === "thread";
+
+  // Detect reel breakdown from raw LLM data
+  const breakdown = raw.breakdown || raw.scenes || raw.shots || [];
+  const duration = raw.duration || "";
+  const reelCaption = raw.reel_caption || "";
+  const reelDescription = raw.reel_description || raw.reel_script || "";
 
   let slides = [];
   if (isCarousel) {
     slides = post.content.split(/\n{0,2}---\n{0,2}/).map((s) => s.trim()).filter(Boolean);
   } else if (isThread) {
-    // Try splitting on tweet number markers: "1/6", "2/6", "1.", "(1)", "Tweet 1:"
     const markerParts = post.content.split(/(?:^|\n{1,2})(?=\d+\/\d+\b|\(\d+\)|\btweet\s*\d+)/im);
     const cleaned = markerParts.map((s) => s.trim()).filter(Boolean);
 
     if (cleaned.length > 2) {
-      // Markers worked — use them
       slides = cleaned;
     } else {
-      // Fallback: split on double newlines
       const nlParts = post.content.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
-      // Filter out bare markers like "1/6" that are just numbering, not content
       slides = nlParts.filter((s) => !/^\d+\/\d+$/.test(s));
     }
   }
@@ -122,6 +216,35 @@ export default function PostCard({ post }) {
         </div>
       )}
 
+      {/* Reel caption (if different from content) */}
+      {reelCaption && reelCaption !== post.content && (
+        <div className="rounded-lg border border-gray-800 bg-gray-950/60 px-3 py-2">
+          <div className="text-[10px] text-violet-400/70 font-medium mb-1">Reel Caption</div>
+          <div className="text-sm text-gray-200 whitespace-pre-wrap">{reelCaption}</div>
+        </div>
+      )}
+
+      {/* Reel description / script */}
+      {reelDescription && (
+        <div className="rounded-lg border border-gray-800 bg-gray-950/60 px-3 py-2">
+          <div className="text-[10px] text-violet-400/70 font-medium mb-1">Reel Script</div>
+          <div className="text-xs text-gray-400 whitespace-pre-wrap">{reelDescription}</div>
+        </div>
+      )}
+
+      {/* Reel shot-by-shot breakdown */}
+      {breakdown.length > 0 && (
+        <ReelBreakdown breakdown={breakdown} duration={duration} />
+      )}
+
+      {/* Duration badge */}
+      {duration && breakdown.length === 0 && (
+        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+          <Clock className="w-3 h-3" />
+          <span>{duration}</span>
+        </div>
+      )}
+
       {/* Hashtags */}
       {post.hashtags?.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -143,6 +266,9 @@ export default function PostCard({ post }) {
           {post.call_to_action}
         </p>
       )}
+
+      {/* Extra raw LLM data */}
+      {Object.keys(raw).length > 0 && <RawDataSection raw={raw} />}
 
       {/* Actions */}
       <div className="flex items-center justify-between pt-2 border-t border-gray-800">
