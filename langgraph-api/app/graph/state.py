@@ -32,6 +32,8 @@ class SocialMediaState(TypedDict):
     # ── Research phase ─────────────────────────────────────────────
     trending_topics: list[dict[str, Any]]   # list of TrendItem dicts
     competitor_insights: list[dict[str, Any]]
+    results_freshness: str                   # "live", "cached", or "unavailable"
+    cache_age_seconds: int                   # age of cached search results
 
     # ── Strategy phase ─────────────────────────────────────────────
     content_plan: dict[str, Any]            # serialized ContentPlan

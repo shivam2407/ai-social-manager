@@ -3,7 +3,7 @@ import ScoreRing from "./ScoreRing";
 import { Copy, Check, Image, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
-function CarouselSlides({ slides, imagePrompt }) {
+function CarouselSlides({ slides, imagePrompt, labelPrefix = "Slide" }) {
   const [active, setActive] = useState(0);
 
   const prev = () => setActive((i) => Math.max(0, i - 1));
@@ -24,7 +24,7 @@ function CarouselSlides({ slides, imagePrompt }) {
         {/* Slide content */}
         <div className="px-4 py-3 min-h-[80px]">
           <div className="text-xs text-violet-400/70 font-medium mb-1.5">
-            Slide {active + 1} of {slides.length}
+            {labelPrefix} {active + 1} of {slides.length}
           </div>
           <div className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">
             {slides[active]}
@@ -80,9 +80,26 @@ export default function PostCard({ post }) {
   };
 
   const isCarousel = post.content_type === "carousel";
-  const slides = isCarousel
-    ? post.content.split(/\n{0,2}---\n{0,2}/).map((s) => s.trim()).filter(Boolean)
-    : [];
+  const isThread = post.content_type === "thread";
+
+  let slides = [];
+  if (isCarousel) {
+    slides = post.content.split(/\n{0,2}---\n{0,2}/).map((s) => s.trim()).filter(Boolean);
+  } else if (isThread) {
+    // Try splitting on tweet number markers: "1/6", "2/6", "1.", "(1)", "Tweet 1:"
+    const markerParts = post.content.split(/(?:^|\n{1,2})(?=\d+\/\d+\b|\(\d+\)|\btweet\s*\d+)/im);
+    const cleaned = markerParts.map((s) => s.trim()).filter(Boolean);
+
+    if (cleaned.length > 2) {
+      // Markers worked — use them
+      slides = cleaned;
+    } else {
+      // Fallback: split on double newlines
+      const nlParts = post.content.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
+      // Filter out bare markers like "1/6" that are just numbering, not content
+      slides = nlParts.filter((s) => !/^\d+\/\d+$/.test(s));
+    }
+  }
 
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5 space-y-4">
@@ -93,8 +110,12 @@ export default function PostCard({ post }) {
       </div>
 
       {/* Content */}
-      {isCarousel && slides.length > 1 ? (
-        <CarouselSlides slides={slides} imagePrompt={post.image_prompt} />
+      {(isCarousel || isThread) && slides.length > 1 ? (
+        <CarouselSlides
+          slides={slides}
+          imagePrompt={post.image_prompt}
+          labelPrefix={isThread ? "Tweet" : "Slide"}
+        />
       ) : (
         <div className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">
           {post.content}

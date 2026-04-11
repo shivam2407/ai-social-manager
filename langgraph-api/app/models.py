@@ -53,11 +53,13 @@ class Generation(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     thread_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True, index=True)
     content_request: Mapped[str] = mapped_column(Text, nullable=False)
     brand_name: Mapped[str] = mapped_column(String(200), default="")
     status: Mapped[str] = mapped_column(String(50), default="completed")
     revision_count: Mapped[int] = mapped_column(Integer, default=0)
     critic_summary: Mapped[str] = mapped_column(Text, default="")
+    raw_llm_responses: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     user: Mapped[User] = relationship(back_populates="generations")

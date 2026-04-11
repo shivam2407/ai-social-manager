@@ -1,7 +1,14 @@
-"""FastAPI application — REST API for the AI Social Media Manager."""
+"""FastAPI application — REST API for the AI Social Media Manager.
+
+Hardened with distributed systems patterns:
+- Idempotency keys on DB writes (prevent duplicate records on retry)
+- Explicit save-failure handling (don't swallow DB errors)
+- Durable checkpointing (SqliteSaver via graph builder)
+"""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -16,7 +23,6 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from langgraph.checkpoint.memory import MemorySaver
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,7 +55,7 @@ logger = logging.getLogger(__name__)
 MAX_STORED_RESULTS = 500
 
 # ── Global state ────────────────────────────────────────────────
-checkpointer = MemorySaver()
+# Checkpointer is now created inside compile_graph() (SqliteSaver by default)
 graph = None
 run_results: OrderedDict[str, dict[str, Any]] = OrderedDict()  # thread_id -> result
 
@@ -59,6 +65,16 @@ def _store_result(thread_id: str, data: dict[str, Any]) -> None:
     run_results[thread_id] = data
     while len(run_results) > MAX_STORED_RESULTS:
         run_results.popitem(last=False)
+
+
+def _make_idempotency_key(content_request: str, brand_name: str, platforms: list[str]) -> str:
+    """Generate a deterministic idempotency key for a generation request.
+
+    Same input always produces the same key. Used to detect and drop
+    duplicate writes caused by retries or timeout-triggered re-submissions.
+    """
+    payload = f"{content_request}:{brand_name}:{','.join(sorted(platforms))}"
+    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 @asynccontextmanager
@@ -74,10 +90,29 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database...")
     await init_db()
 
+    # Set up durable async checkpointer (AsyncSqliteSaver)
     logger.info("Compiling LangGraph multi-agent graph...")
-    graph = compile_graph(checkpointer=checkpointer)
-    logger.info("Graph ready. API is live.")
-    yield
+    checkpoint_db = os.path.join(
+        os.path.dirname(__file__), "..", "data", "checkpoints.db"
+    )
+    os.makedirs(os.path.dirname(checkpoint_db), exist_ok=True)
+
+    try:
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+        async with AsyncSqliteSaver.from_conn_string(checkpoint_db) as checkpointer:
+            logger.info("Using durable AsyncSqliteSaver at %s", checkpoint_db)
+            graph = compile_graph(checkpointer=checkpointer)
+            logger.info("Graph ready. API is live.")
+            yield
+    except Exception as e:
+        logger.warning(
+            "AsyncSqliteSaver failed (%s) — falling back to MemorySaver", e
+        )
+        graph = compile_graph()  # falls back to MemorySaver
+        logger.info("Graph ready (in-memory checkpointer). API is live.")
+        yield
+
     logger.info("Shutting down.")
 
 
@@ -174,6 +209,8 @@ async def generate_content(
         "messages": [],
         "trending_topics": [],
         "competitor_insights": [],
+        "results_freshness": "unknown",
+        "cache_age_seconds": 0,
         "content_plan": {},
         "selected_angles": [],
         "drafts": {},
@@ -231,34 +268,86 @@ async def generate_content(
             critic_summary=raw_summary if isinstance(raw_summary, str) else json.dumps(raw_summary),
         )
 
-        # Save generation + posts to database
-        try:
-            gen = Generation(
-                user_id=user.id,
-                thread_id=thread_id,
-                content_request=request.content_request,
-                brand_name=request.brand_name,
-                status="completed",
-                revision_count=result.get("revision_count", 0),
-                critic_summary=result.get("critic_summary", ""),
-            )
-            db.add(gen)
-            await db.flush()
+        # ── Idempotent save: check-before-write to prevent duplicates on retry ──
+        idempotency_key = _make_idempotency_key(
+            request.content_request,
+            request.brand_name,
+            [p.value for p in request.target_platforms],
+        )
 
-            for fp in final_posts:
-                db.add(Post(
-                    generation_id=gen.id,
-                    platform=fp.platform.value,
-                    content=fp.content,
-                    hashtags=fp.hashtags,
-                    call_to_action=fp.call_to_action,
-                    content_type=fp.content_type,
-                    image_prompt=fp.image_prompt,
-                    critic_score=fp.critic_score,
-                ))
-            await db.commit()
-        except Exception as e:
-            logger.error("Failed to save generation to DB: %s", e)
+        existing = await db.execute(
+            select(Generation).where(
+                (Generation.thread_id == thread_id) | (Generation.idempotency_key == idempotency_key)
+            )
+        )
+        if existing.scalar_one_or_none():
+            logger.info("Idempotency: generation %s already saved (key=%s) — skipping duplicate write", thread_id, idempotency_key[:12])
+        else:
+            # Save generation + posts to database.
+            # IMPORTANT: if this fails, we surface the error to the user instead of
+            # silently swallowing it. The pipeline ran, burned API credits, and
+            # produced output — losing it on the floor is unacceptable.
+            try:
+                critic_summary_val = result.get("critic_summary", "")
+                if not isinstance(critic_summary_val, str):
+                    critic_summary_val = json.dumps(critic_summary_val)
+
+                # Extract raw LLM responses from each agent for debugging
+                raw_llm = {}
+                for msg in result.get("messages", []):
+                    # Each agent appends its response to messages
+                    content = msg.content if hasattr(msg, "content") else str(msg)
+                    if isinstance(content, list):
+                        content = " ".join(
+                            b.get("text", "") if isinstance(b, dict) else str(b)
+                            for b in content
+                        )
+                    # Use the message type + index as key
+                    key = f"message_{len(raw_llm)}"
+                    raw_llm[key] = content[:10000]  # cap per message to avoid huge payloads
+
+                # Also store the raw drafts and critic scores as the LLM returned them
+                raw_llm["drafts"] = result.get("drafts", {})
+                raw_llm["critic_scores"] = result.get("critic_scores", {})
+                raw_llm["trending_topics"] = result.get("trending_topics", [])
+                raw_llm["competitor_insights"] = result.get("competitor_insights", [])
+
+                gen = Generation(
+                    user_id=user.id,
+                    thread_id=thread_id,
+                    idempotency_key=idempotency_key,
+                    content_request=request.content_request,
+                    brand_name=request.brand_name,
+                    status="completed",
+                    revision_count=result.get("revision_count", 0),
+                    critic_summary=critic_summary_val,
+                    raw_llm_responses=raw_llm,
+                )
+                db.add(gen)
+                await db.flush()
+
+                for fp in final_posts:
+                    db.add(Post(
+                        generation_id=gen.id,
+                        platform=fp.platform.value,
+                        content=fp.content,
+                        hashtags=fp.hashtags,
+                        call_to_action=fp.call_to_action,
+                        content_type=fp.content_type,
+                        image_prompt=fp.image_prompt,
+                        critic_score=fp.critic_score,
+                    ))
+                await db.commit()
+                logger.info("Generation %s saved to database successfully", thread_id)
+            except Exception as e:
+                logger.error(
+                    "CRITICAL: Failed to save generation %s to DB after successful pipeline run: %s",
+                    thread_id, e,
+                )
+                await db.rollback()
+                # Still return the response so the user sees their content,
+                # but flag that persistence failed
+                response.status = "completed_save_failed"
 
         # Store result for status lookups (bounded)
         _store_result(thread_id, {

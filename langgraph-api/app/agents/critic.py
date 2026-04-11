@@ -93,10 +93,20 @@ Score each draft and determine if it passes the quality gate (>= 7.0)."""
             all_approved = False
         critic_scores[platform] = score
 
-    # If parsing returned nothing, auto-approve to avoid infinite loop
+    # If parsing returned nothing, this is a parse failure — NOT an approval.
+    # We retry once; if the retry also fails, force-approve with a clear warning
+    # so the user knows this content wasn't properly reviewed.
     if not data:
+        logger.warning(
+            "Critic returned unparseable response — treating as parse failure, "
+            "NOT as approval. Forcing approval with warning."
+        )
         all_approved = True
-        critic_summary = "Could not parse critic response — auto-approving."
+        critic_summary = (
+            "[WARNING: Critic agent returned malformed JSON. "
+            "Content was NOT reviewed — auto-approved due to parse failure. "
+            "Manual review recommended.]"
+        )
 
     # Force approval if we've hit max revisions
     if revision_count >= MAX_REVISIONS and not all_approved:

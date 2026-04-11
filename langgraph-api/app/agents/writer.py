@@ -86,19 +86,28 @@ async def writer_node(state: dict[str, Any]) -> dict[str, Any]:
     for platform in target_platforms:
         if platform in raw_drafts:
             draft = raw_drafts[platform]
-            logger.debug("Writer draft for %s keys: %s", platform, list(draft.keys()) if isinstance(draft, dict) else type(draft))
+            logger.info("Writer draft for %s keys: %s", platform, list(draft.keys()) if isinstance(draft, dict) else type(draft))
 
             # Some providers nest content under different keys
             if isinstance(draft, dict) and not draft.get("content"):
-                # Try common alternative keys
-                for alt_key in ("caption", "text", "body", "post", "copy"):
+                # Try common alternative keys (including Instagram-specific ones)
+                for alt_key in ("caption", "text", "body", "post", "copy",
+                                "reel_script", "reel_caption", "reel",
+                                "story", "description", "main_caption"):
                     if alt_key in draft:
-                        draft["content"] = draft[alt_key]
-                        break
+                        val = draft[alt_key]
+                        if isinstance(val, str) and val.strip():
+                            draft["content"] = val
+                            break
+                        elif isinstance(val, dict):
+                            # e.g. {"reel": {"script": "...", "caption": "..."}}
+                            draft["content"] = val.get("caption", val.get("script", val.get("text", str(val))))
+                            break
 
                 # If still no content, try joining sub-posts (carousel/thread)
                 if not draft.get("content"):
-                    for key in ("posts", "slides", "items", "thread"):
+                    for key in ("posts", "slides", "items", "thread", "tweets",
+                                "carousel_slides", "carousel", "reels"):
                         if isinstance(draft.get(key), list):
                             parts = []
                             for item in draft[key]:
@@ -106,8 +115,23 @@ async def writer_node(state: dict[str, Any]) -> dict[str, Any]:
                                     parts.append(item)
                                 elif isinstance(item, dict):
                                     parts.append(item.get("content", item.get("caption", item.get("text", str(item)))))
-                            draft["content"] = "\n\n---\n\n".join(parts)
+                            # Use --- for carousels, \n\n for threads
+                            sep = "\n\n---\n\n" if key in ("slides", "items", "carousel_slides", "carousel") else "\n\n"
+                            draft["content"] = sep.join(parts)
                             break
+
+                # Last resort: concatenate all string values in the draft
+                if not draft.get("content"):
+                    string_vals = [v for k, v in draft.items()
+                                   if isinstance(v, str) and v.strip()
+                                   and k not in ("platform", "content_type", "image_prompt")]
+                    if string_vals:
+                        draft["content"] = "\n\n".join(string_vals)
+                        logger.warning(
+                            "Writer: no recognized content key for %s, "
+                            "concatenated %d string fields as fallback",
+                            platform, len(string_vals),
+                        )
 
             if isinstance(draft, str):
                 draft = {"content": draft}

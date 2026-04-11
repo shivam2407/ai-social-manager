@@ -1,16 +1,18 @@
 """LangGraph StateGraph builder — the core multi-agent orchestration.
 
-Senior-level LangGraph patterns demonstrated:
+Patterns demonstrated:
 - StateGraph with typed state
 - Conditional edges (score-based routing)
 - Cycles (writer ↔ critic revision loop, capped at 3)
-- Checkpointer for persistence and human-in-the-loop
+- **Durable checkpointing** via SqliteSaver — survives process crashes
+  (MemorySaver loses all in-flight generations on restart)
 - Clean node registration and edge definitions
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -23,6 +25,12 @@ from app.agents.writer import writer_node
 from app.graph.state import SocialMediaState
 
 logger = logging.getLogger(__name__)
+
+# Path for durable checkpoint storage (SQLite)
+CHECKPOINT_DB_PATH = os.environ.get(
+    "CHECKPOINT_DB_PATH",
+    os.path.join(os.path.dirname(__file__), "..", "..", "data", "checkpoints.db"),
+)
 
 # Maximum revision cycles before force-approving
 MAX_REVISIONS = 3
@@ -127,18 +135,23 @@ def build_graph() -> StateGraph:
     return graph
 
 
-def compile_graph(checkpointer: MemorySaver | None = None):
-    """Build and compile the graph with an optional checkpointer.
+def compile_graph(checkpointer=None):
+    """Build and compile the graph with a checkpointer.
 
     The checkpointer enables:
-    - Persistence (resume interrupted runs)
+    - **Durable persistence** — state survives process crashes
+    - Resumable runs — if the process dies after step N, it resumes from step N
     - Human-in-the-loop (pause at checkpoints for approval)
     - Debugging (inspect state at any node)
+
+    Pass a pre-built AsyncSqliteSaver from the lifespan for durable persistence,
+    or None to use MemorySaver as fallback.
     """
     graph = build_graph()
 
     if checkpointer is None:
         checkpointer = MemorySaver()
+        logger.info("Using in-memory checkpointer (state lost on restart)")
 
     compiled = graph.compile(checkpointer=checkpointer)
     logger.info("Graph compiled successfully with %s", type(checkpointer).__name__)
